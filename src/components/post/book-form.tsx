@@ -3,41 +3,24 @@
 import { useState } from "react";
 import { Dialog } from "@headlessui/react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import Image from "next/image";
+import { PostCategory } from "@prisma/client";
+import type { BookFormData } from "@/lib/types";
 
-type MediaType = "image" | "video";
-type VideoSource = "youtube" | "vimeo" | "twitter";
-
-interface ThoughtLeadershipFormData {
-  mediaType: MediaType;
-  title: string;
-  content: string;
-  imageUrl?: string;
-  videoSource?: VideoSource;
-  videoUrl?: string;
-}
-
-interface ThoughtLeadershipFormProps {
+interface BookFormProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: ThoughtLeadershipFormData) => Promise<void>;
+  onSubmit: (data: BookFormData) => Promise<void>;
   error?: string | null;
 }
 
-export function ThoughtLeadershipForm({
-  isOpen,
-  onClose,
-  onSubmit,
-  error,
-}: ThoughtLeadershipFormProps) {
-  const [mediaType, setMediaType] = useState<MediaType>("image");
-  const [videoSource, setVideoSource] = useState<VideoSource>("youtube");
+export function BookForm({ isOpen, onClose, onSubmit, error }: BookFormProps) {
   const [title, setTitle] = useState("");
+  const [authorName, setAuthorName] = useState("");
   const [content, setContent] = useState("");
+  const [purchaseUrl, setPurchaseUrl] = useState("");
   const [image, setImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [videoUrl, setVideoUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -84,26 +67,23 @@ export function ThoughtLeadershipForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (mediaType === "image" && !image) {
-      setUploadError("Please select an image");
-      return;
-    }
-
     setIsSubmitting(true);
     setUploadError(null);
 
     try {
-      let imageUrl: string | undefined;
+      let coverImage: string | undefined;
 
-      if (mediaType === "image" && image) {
-        imageUrl = await uploadImage(image);
+      if (image) {
+        coverImage = await uploadImage(image);
       }
 
-      const formData: ThoughtLeadershipFormData = {
-        mediaType,
+      const formData: BookFormData = {
         title,
+        authorName,
         content,
-        ...(mediaType === "image" ? { imageUrl } : { videoSource, videoUrl }),
+        purchaseUrl,
+        coverImage,
+        category: PostCategory.BOOKS,
       };
 
       await onSubmit(formData);
@@ -128,7 +108,7 @@ export function ThoughtLeadershipForm({
             <Dialog.Panel className="relative mx-auto w-full max-w-2xl rounded-lg bg-white shadow-xl">
               <div className="sticky top-0 z-10 border-b bg-white px-6 py-4">
                 <Dialog.Title className="text-2xl font-bold text-neutral-900">
-                  Create Thought Leadership Post
+                  Share a Book
                 </Dialog.Title>
               </div>
 
@@ -162,129 +142,93 @@ export function ThoughtLeadershipForm({
                     </div>
                   )}
 
-                  {/* Media Type Toggle */}
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-neutral-700">
-                      Media Type <span className="text-red-500">*</span>
-                    </label>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setMediaType("image")}
-                        className={cn(
-                          "rounded-md px-4 py-2 text-sm font-medium",
-                          mediaType === "image"
-                            ? "bg-primary text-white"
-                            : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
-                        )}
-                      >
-                        Image
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setMediaType("video")}
-                        className={cn(
-                          "rounded-md px-4 py-2 text-sm font-medium",
-                          mediaType === "video"
-                            ? "bg-primary text-white"
-                            : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
-                        )}
-                      >
-                        Video
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Media Upload Section */}
-                  {mediaType === "image" ? (
-                    <div className="space-y-2">
-                      <label className="block text-sm font-medium text-neutral-700">
-                        Image
-                      </label>
-                      <div className="space-y-4">
-                        <div className="flex flex-col gap-2">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleImageChange}
-                            className="w-full rounded-md border border-neutral-300 px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                          />
-                          {uploadError && (
-                            <p className="text-sm text-red-500">
-                              {uploadError}
-                            </p>
-                          )}
-                        </div>
-                        {imagePreview && (
-                          <div className="relative aspect-video w-full overflow-hidden rounded-lg border">
-                            <Image
-                              src={imagePreview}
-                              alt="Preview"
-                              fill
-                              className="object-cover"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="space-y-2">
-                        <label className="block text-sm font-medium text-neutral-700">
-                          Video Source <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          value={videoSource}
-                          onChange={(e) =>
-                            setVideoSource(e.target.value as VideoSource)
-                          }
-                          className="w-full rounded-md border border-neutral-300 px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                        >
-                          <option value="youtube">YouTube</option>
-                          <option value="vimeo">Vimeo</option>
-                          <option value="twitter">Twitter</option>
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="block text-sm font-medium text-neutral-700">
-                          Video URL <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={videoUrl}
-                          onChange={(e) => setVideoUrl(e.target.value)}
-                          placeholder="Enter video URL"
-                          className="w-full rounded-md border border-neutral-300 px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                        />
-                      </div>
-                    </>
-                  )}
-
                   {/* Title */}
                   <div className="space-y-2">
                     <label className="block text-sm font-medium text-neutral-700">
-                      Title <span className="text-red-500">*</span>
+                      Book Title <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
-                      placeholder="Enter title"
+                      placeholder="Enter book title"
                       className="w-full rounded-md border border-neutral-300 px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      required
                     />
                   </div>
 
-                  {/* Content */}
+                  {/* Cover Image */}
                   <div className="space-y-2">
                     <label className="block text-sm font-medium text-neutral-700">
-                      Content <span className="text-red-500">*</span>
+                      Book Cover Image
+                    </label>
+                    <div className="space-y-4">
+                      <div className="flex flex-col gap-2">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageChange}
+                          className="w-full rounded-md border border-neutral-300 px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                        {uploadError && (
+                          <p className="text-sm text-red-500">{uploadError}</p>
+                        )}
+                      </div>
+                      {imagePreview && (
+                        <div className="relative aspect-[3/4] w-48 overflow-hidden rounded-lg border">
+                          <Image
+                            src={imagePreview}
+                            alt="Book cover preview"
+                            fill
+                            className="object-cover"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Author Name */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-neutral-700">
+                      Author Name(s) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={authorName}
+                      onChange={(e) => setAuthorName(e.target.value)}
+                      placeholder="Enter author name(s)"
+                      className="w-full rounded-md border border-neutral-300 px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      required
+                    />
+                  </div>
+
+                  {/* Description */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-neutral-700">
+                      Book Description <span className="text-red-500">*</span>
                     </label>
                     <textarea
                       value={content}
                       onChange={(e) => setContent(e.target.value)}
-                      placeholder="Write your thoughts..."
+                      placeholder="Write a description of the book..."
                       rows={6}
                       className="w-full rounded-md border border-neutral-300 px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      required
+                    />
+                  </div>
+
+                  {/* Purchase URL */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-neutral-700">
+                      Purchase URL <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="url"
+                      value={purchaseUrl}
+                      onChange={(e) => setPurchaseUrl(e.target.value)}
+                      placeholder="Enter purchase URL"
+                      className="w-full rounded-md border border-neutral-300 px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      required
                     />
                   </div>
                 </div>

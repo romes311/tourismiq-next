@@ -3,41 +3,30 @@
 import { useState } from "react";
 import { Dialog } from "@headlessui/react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import Image from "next/image";
 
-type MediaType = "image" | "video";
-type VideoSource = "youtube" | "vimeo" | "twitter";
-
-interface ThoughtLeadershipFormData {
-  mediaType: MediaType;
+interface NewsFormData {
   title: string;
-  content: string;
   imageUrl?: string;
-  videoSource?: VideoSource;
-  videoUrl?: string;
+  imageCaption: string;
+  content: string;
+  sourceUrl: string;
 }
 
-interface ThoughtLeadershipFormProps {
+interface NewsFormProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: ThoughtLeadershipFormData) => Promise<void>;
+  onSubmit: (data: NewsFormData) => Promise<void>;
   error?: string | null;
 }
 
-export function ThoughtLeadershipForm({
-  isOpen,
-  onClose,
-  onSubmit,
-  error,
-}: ThoughtLeadershipFormProps) {
-  const [mediaType, setMediaType] = useState<MediaType>("image");
-  const [videoSource, setVideoSource] = useState<VideoSource>("youtube");
+export function NewsForm({ isOpen, onClose, onSubmit, error }: NewsFormProps) {
   const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
   const [image, setImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [videoUrl, setVideoUrl] = useState("");
+  const [imageCaption, setImageCaption] = useState("");
+  const [content, setContent] = useState("");
+  const [sourceUrl, setSourceUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -84,7 +73,8 @@ export function ThoughtLeadershipForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (mediaType === "image" && !image) {
+
+    if (!image) {
       setUploadError("Please select an image");
       return;
     }
@@ -93,25 +83,22 @@ export function ThoughtLeadershipForm({
     setUploadError(null);
 
     try {
-      let imageUrl: string | undefined;
+      const imageUrl = await uploadImage(image);
 
-      if (mediaType === "image" && image) {
-        imageUrl = await uploadImage(image);
-      }
-
-      const formData: ThoughtLeadershipFormData = {
-        mediaType,
+      const formData: NewsFormData = {
         title,
+        imageUrl,
+        imageCaption,
         content,
-        ...(mediaType === "image" ? { imageUrl } : { videoSource, videoUrl }),
+        sourceUrl,
       };
 
       await onSubmit(formData);
       onClose();
     } catch (error) {
-      console.error("Failed to create post:", error);
+      console.error("Failed to create news post:", error);
       setUploadError(
-        error instanceof Error ? error.message : "Failed to create post"
+        error instanceof Error ? error.message : "Failed to create news post"
       );
     } finally {
       setIsSubmitting(false);
@@ -128,7 +115,7 @@ export function ThoughtLeadershipForm({
             <Dialog.Panel className="relative mx-auto w-full max-w-2xl rounded-lg bg-white shadow-xl">
               <div className="sticky top-0 z-10 border-b bg-white px-6 py-4">
                 <Dialog.Title className="text-2xl font-bold text-neutral-900">
-                  Create Thought Leadership Post
+                  Create News Post
                 </Dialog.Title>
               </div>
 
@@ -162,129 +149,93 @@ export function ThoughtLeadershipForm({
                     </div>
                   )}
 
-                  {/* Media Type Toggle */}
+                  {/* Article Title */}
                   <div className="space-y-2">
                     <label className="block text-sm font-medium text-neutral-700">
-                      Media Type <span className="text-red-500">*</span>
-                    </label>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setMediaType("image")}
-                        className={cn(
-                          "rounded-md px-4 py-2 text-sm font-medium",
-                          mediaType === "image"
-                            ? "bg-primary text-white"
-                            : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
-                        )}
-                      >
-                        Image
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setMediaType("video")}
-                        className={cn(
-                          "rounded-md px-4 py-2 text-sm font-medium",
-                          mediaType === "video"
-                            ? "bg-primary text-white"
-                            : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
-                        )}
-                      >
-                        Video
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Media Upload Section */}
-                  {mediaType === "image" ? (
-                    <div className="space-y-2">
-                      <label className="block text-sm font-medium text-neutral-700">
-                        Image
-                      </label>
-                      <div className="space-y-4">
-                        <div className="flex flex-col gap-2">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleImageChange}
-                            className="w-full rounded-md border border-neutral-300 px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                          />
-                          {uploadError && (
-                            <p className="text-sm text-red-500">
-                              {uploadError}
-                            </p>
-                          )}
-                        </div>
-                        {imagePreview && (
-                          <div className="relative aspect-video w-full overflow-hidden rounded-lg border">
-                            <Image
-                              src={imagePreview}
-                              alt="Preview"
-                              fill
-                              className="object-cover"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="space-y-2">
-                        <label className="block text-sm font-medium text-neutral-700">
-                          Video Source <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          value={videoSource}
-                          onChange={(e) =>
-                            setVideoSource(e.target.value as VideoSource)
-                          }
-                          className="w-full rounded-md border border-neutral-300 px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                        >
-                          <option value="youtube">YouTube</option>
-                          <option value="vimeo">Vimeo</option>
-                          <option value="twitter">Twitter</option>
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="block text-sm font-medium text-neutral-700">
-                          Video URL <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={videoUrl}
-                          onChange={(e) => setVideoUrl(e.target.value)}
-                          placeholder="Enter video URL"
-                          className="w-full rounded-md border border-neutral-300 px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {/* Title */}
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-neutral-700">
-                      Title <span className="text-red-500">*</span>
+                      Article Title <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
-                      placeholder="Enter title"
+                      placeholder="Enter article title"
                       className="w-full rounded-md border border-neutral-300 px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      required
                     />
                   </div>
 
-                  {/* Content */}
+                  {/* Article Image */}
                   <div className="space-y-2">
                     <label className="block text-sm font-medium text-neutral-700">
-                      Content <span className="text-red-500">*</span>
+                      Article Image <span className="text-red-500">*</span>
+                    </label>
+                    <div className="space-y-4">
+                      <div className="flex flex-col gap-2">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageChange}
+                          className="w-full rounded-md border border-neutral-300 px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                        {uploadError && (
+                          <p className="text-sm text-red-500">{uploadError}</p>
+                        )}
+                      </div>
+                      {imagePreview && (
+                        <div className="relative aspect-video w-full overflow-hidden rounded-lg border">
+                          <Image
+                            src={imagePreview}
+                            alt="Preview"
+                            fill
+                            className="object-cover"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Image Caption */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-neutral-700">
+                      Image Caption <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={imageCaption}
+                      onChange={(e) => setImageCaption(e.target.value)}
+                      placeholder="Enter image caption"
+                      className="w-full rounded-md border border-neutral-300 px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      required
+                    />
+                  </div>
+
+                  {/* Article Thoughts */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-neutral-700">
+                      Article Thoughts <span className="text-red-500">*</span>
                     </label>
                     <textarea
                       value={content}
                       onChange={(e) => setContent(e.target.value)}
-                      placeholder="Write your thoughts..."
+                      placeholder="Share your thoughts about this article..."
                       rows={6}
                       className="w-full rounded-md border border-neutral-300 px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      required
+                    />
+                  </div>
+
+                  {/* Source URL */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-neutral-700">
+                      Article Source URL <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="url"
+                      value={sourceUrl}
+                      onChange={(e) => setSourceUrl(e.target.value)}
+                      placeholder="Enter the source URL"
+                      className="w-full rounded-md border border-neutral-300 px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      required
                     />
                   </div>
                 </div>

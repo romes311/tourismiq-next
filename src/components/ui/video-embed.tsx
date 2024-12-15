@@ -80,6 +80,9 @@ export function VideoEmbed({ url, videoSource }: VideoEmbedProps) {
   useEffect(() => {
     if (videoSource === "twitter") {
       initializeTweet();
+    } else {
+      // For non-Twitter embeds, we'll handle loading state differently
+      setIsLoading(false);
     }
   }, [url, videoSource]);
 

@@ -5,11 +5,11 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   request: Request,
-  context: { params: { postId: string } }
+  { params }: { params: { postId: string } }
 ) {
-  try {
-    const { postId } = await context.params;
+  const postId = params.postId;
 
+  try {
     const comments = await prisma.comment.findMany({
       where: {
         postId,
@@ -39,41 +39,23 @@ export async function GET(
 
 export async function POST(
   request: Request,
-  context: { params: { postId: string } }
+  { params }: { params: { postId: string } }
 ) {
-  try {
-    const { postId } = await context.params;
+  const postId = params.postId;
 
+  try {
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
-      console.error("Unauthorized: No user session or missing user ID");
-      return NextResponse.json(
-        { error: "Unauthorized - Please log in" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { content } = await request.json();
-    if (!content?.trim()) {
-      return NextResponse.json(
-        { error: "Comment content is required" },
-        { status: 400 }
-      );
-    }
-
-    // Verify the post exists
-    const post = await prisma.post.findUnique({
-      where: { id: postId },
-    });
-
-    if (!post) {
-      return NextResponse.json({ error: "Post not found" }, { status: 404 });
-    }
+    const body = await request.json();
+    const { content } = body;
 
     const comment = await prisma.comment.create({
       data: {
-        content: content.trim(),
+        content,
         postId,
         authorId: session.user.id,
       },

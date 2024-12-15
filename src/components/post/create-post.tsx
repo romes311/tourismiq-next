@@ -7,12 +7,22 @@ import { useAuth } from "@/hooks/use-auth";
 import { Menu } from "@headlessui/react";
 import { cn } from "@/lib/utils";
 import { ThoughtLeadershipForm } from "./thought-leadership-form";
+import { NewsForm } from "./news-form";
+import { EventsForm } from "./events-form";
+import { BlogPostForm } from "./blog-post-form";
+import { BookForm } from "./book-form";
+import { CourseForm } from "./course-form";
 import { useQueryClient } from "@tanstack/react-query";
 import type { InfiniteData } from "@tanstack/react-query";
 import type {
   Post,
   PostsResponse,
   ThoughtLeadershipFormData,
+  NewsFormData,
+  EventFormData,
+  BlogPostFormData,
+  BookFormData,
+  CourseFormData,
 } from "@/lib/types";
 
 // Flatten all categories into a single array
@@ -56,7 +66,15 @@ export function CreatePost() {
     setError(null);
   };
 
-  const handleSubmitPost = async (data: ThoughtLeadershipFormData) => {
+  const handleSubmitPost = async (
+    data:
+      | ThoughtLeadershipFormData
+      | NewsFormData
+      | EventFormData
+      | BlogPostFormData
+      | BookFormData
+      | CourseFormData
+  ) => {
     if (!user?.id) {
       throw new Error("You must be logged in to create a post");
     }
@@ -79,9 +97,14 @@ export function CreatePost() {
         summary: null,
         category: selectedCategory!,
         createdAt: new Date().toISOString(),
-        featuredImage: data.imageUrl || null,
-        videoUrl: data.videoUrl || null,
-        metadata: data.videoUrl ? { videoSource: data.videoSource } : null,
+        featuredImage: "imageUrl" in data ? data.imageUrl || null : null,
+        videoUrl: "videoUrl" in data ? data.videoUrl || null : null,
+        metadata:
+          "videoUrl" in data && data.videoUrl
+            ? { videoSource: data.videoSource }
+            : "imageCaption" in data
+            ? { imageCaption: data.imageCaption, sourceUrl: data.sourceUrl }
+            : null,
         upvoteCount: 0,
         authorId: user.id,
         author: {
@@ -141,7 +164,10 @@ export function CreatePost() {
           errorMessage = responseData.error;
           if (responseData.details) {
             errorMessage +=
-              ": " + responseData.details.map((d: any) => d.message).join(", ");
+              ": " +
+              (responseData.details as { message: string }[])
+                .map((d) => d.message)
+                .join(", ");
           }
         }
         throw new Error(errorMessage);
@@ -239,6 +265,46 @@ export function CreatePost() {
       {/* Category-specific Forms */}
       {selectedCategory === PostCategory.THOUGHT_LEADERSHIP && (
         <ThoughtLeadershipForm
+          isOpen={true}
+          onClose={handleCloseForm}
+          onSubmit={handleSubmitPost}
+          error={error}
+        />
+      )}
+      {selectedCategory === PostCategory.NEWS && (
+        <NewsForm
+          isOpen={true}
+          onClose={handleCloseForm}
+          onSubmit={handleSubmitPost}
+          error={error}
+        />
+      )}
+      {selectedCategory === PostCategory.EVENTS && (
+        <EventsForm
+          isOpen={true}
+          onClose={handleCloseForm}
+          onSubmit={handleSubmitPost}
+          error={error}
+        />
+      )}
+      {selectedCategory === PostCategory.BLOG_POSTS && (
+        <BlogPostForm
+          isOpen={true}
+          onClose={handleCloseForm}
+          onSubmit={handleSubmitPost}
+          error={error}
+        />
+      )}
+      {selectedCategory === PostCategory.BOOKS && (
+        <BookForm
+          isOpen={true}
+          onClose={handleCloseForm}
+          onSubmit={handleSubmitPost}
+          error={error}
+        />
+      )}
+      {selectedCategory === PostCategory.COURSES && (
+        <CourseForm
           isOpen={true}
           onClose={handleCloseForm}
           onSubmit={handleSubmitPost}
