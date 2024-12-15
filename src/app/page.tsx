@@ -1,3 +1,5 @@
+"use client";
+
 import { Header } from "@/components/layout/header";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { FriendsSidebar } from "@/components/layout/friends-sidebar";

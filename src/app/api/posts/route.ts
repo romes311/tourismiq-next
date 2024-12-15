@@ -1,9 +1,22 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
-export async function GET() {
+const POSTS_PER_PAGE = 5;
+
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const cursor = searchParams.get("cursor");
+    const limit = Number(searchParams.get("limit")) || POSTS_PER_PAGE;
+
     const posts = await prisma.post.findMany({
+      take: limit + 1, // take an extra item to determine if there are more items
+      ...(cursor && {
+        skip: 1, // Skip the cursor
+        cursor: {
+          id: cursor,
+        },
+      }),
       select: {
         id: true,
         title: true,
@@ -38,7 +51,16 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json(posts);
+    let nextCursor: string | undefined = undefined;
+    if (posts.length > limit) {
+      const nextItem = posts.pop();
+      nextCursor = nextItem?.id;
+    }
+
+    return NextResponse.json({
+      items: posts,
+      nextCursor,
+    });
   } catch (error) {
     console.error("[POSTS_GET]", error);
     return new NextResponse("Internal Error", { status: 500 });

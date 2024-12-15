@@ -1,18 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
-interface UpvoteResponse {
-  upvoted: boolean;
-  upvoteCount: number;
-}
-
 const UPVOTED_POSTS_KEY = "upvoted_posts";
 
 export function useUpvote(postId: string) {
   const queryClient = useQueryClient();
   const [isUpvoted, setIsUpvoted] = useState(false);
 
-  // Load upvoted state from localStorage on mount
+  // Load upvoted state from localStorage
   useEffect(() => {
     const upvotedPosts = JSON.parse(
       localStorage.getItem(UPVOTED_POSTS_KEY) || "[]"
@@ -22,34 +17,44 @@ export function useUpvote(postId: string) {
 
   const { mutate: toggleUpvote, isPending: isUpvoting } = useMutation({
     mutationFn: async () => {
-      const method = isUpvoted ? "DELETE" : "POST";
-      const response = await fetch(`/api/posts/${postId}/upvote`, {
-        method,
+      const action = isUpvoted ? "remove" : "upvote";
+
+      const response = await fetch("/api/posts/upvote", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          postId,
+          action,
+        }),
       });
+
       if (!response.ok) {
-        throw new Error("Failed to toggle upvote");
+        throw new Error("Failed to update upvote");
       }
-      return response.json() as Promise<UpvoteResponse>;
-    },
-    onSuccess: (data) => {
+
       // Update localStorage
       const upvotedPosts = JSON.parse(
         localStorage.getItem(UPVOTED_POSTS_KEY) || "[]"
       );
-      if (data.upvoted) {
-        localStorage.setItem(
-          UPVOTED_POSTS_KEY,
-          JSON.stringify([...upvotedPosts, postId])
-        );
-      } else {
+
+      if (isUpvoted) {
         localStorage.setItem(
           UPVOTED_POSTS_KEY,
           JSON.stringify(upvotedPosts.filter((id: string) => id !== postId))
         );
+      } else {
+        localStorage.setItem(
+          UPVOTED_POSTS_KEY,
+          JSON.stringify([...upvotedPosts, postId])
+        );
       }
-      setIsUpvoted(data.upvoted);
 
-      // Invalidate the posts query to update the upvote count
+      // Update local state
+      setIsUpvoted(!isUpvoted);
+
+      // Refetch posts to get updated counts
       queryClient.invalidateQueries({ queryKey: ["posts"] });
     },
   });

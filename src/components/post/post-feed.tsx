@@ -9,6 +9,8 @@ import { PostCategory } from "@prisma/client";
 import { formatDistanceToNow } from "date-fns";
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect } from "react";
+import { useInView } from "react-intersection-observer";
 
 function JoinBanner() {
   return (
@@ -241,7 +243,24 @@ function ErrorMessage({
 
 export function PostFeed() {
   const { isAuthenticated } = useAuth();
-  const { data: posts, isLoading, error, isError, refetch } = usePosts();
+  const {
+    data,
+    isLoading,
+    error,
+    isError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = usePosts();
+
+  // Set up intersection observer for infinite scroll
+  const { ref, inView } = useInView();
+
+  useEffect(() => {
+    if (inView && hasNextPage) {
+      fetchNextPage();
+    }
+  }, [inView, fetchNextPage, hasNextPage]);
 
   return (
     <div className="space-y-6">
@@ -255,23 +274,30 @@ export function PostFeed() {
           error={
             error instanceof Error ? error : new Error("Failed to load posts")
           }
-          onRetry={() => refetch()}
+          onRetry={() => window.location.reload()}
         />
       )}
 
-      {!isLoading && !isError && !posts?.length && (
+      {!isLoading && !isError && !data?.pages[0]?.items.length && (
         <div className="rounded-lg border bg-white p-6 text-center">
           <p className="text-neutral-600">No posts yet</p>
         </div>
       )}
 
-      {!isLoading && !isError && posts && posts.length > 0 && (
-        <div className="space-y-6">
-          {posts.map((post) => (
-            <PostCard key={post.id} post={post} />
-          ))}
-        </div>
-      )}
+      {!isLoading &&
+        !isError &&
+        data?.pages.map((page, i) => (
+          <div key={i} className="space-y-6">
+            {page.items.map((post) => (
+              <PostCard key={post.id} post={post} />
+            ))}
+          </div>
+        ))}
+
+      {/* Load more trigger */}
+      <div ref={ref} className="h-10">
+        {isFetchingNextPage && <LoadingSpinner />}
+      </div>
     </div>
   );
 }
