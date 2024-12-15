@@ -1,0 +1,200 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+  SUBSCRIBER
+  FOUNDER
+  VENDOR
+}
+
+enum PostCategory {
+  THOUGHT_LEADERSHIP
+  NEWS
+  EVENTS
+  BLOG_POSTS
+  BOOKS
+  COURSES
+  PODCASTS
+  PRESENTATIONS
+  PRESS_RELEASES
+  TEMPLATES
+  VIDEOS
+  WEBINARS
+  CASE_STUDIES
+  WHITEPAPERS
+  JOBS
+  RECENT_JOBS
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String
+  role          Role      @default(USER)
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  profile       Profile?
+  posts         Post[]
+  comments      Comment[]
+
+  followers     Follows[] @relation("following")
+  following     Follows[] @relation("follower")
+
+  businessName  String?
+  businessType  String?
+
+  notifications Notification[]
+  activities    Activity[]
+}
+
+model Profile {
+  id          String   @id @default(cuid())
+  bio         String?
+  location    String?
+  website     String?
+  occupation  String?
+  interests   String[]
+  coverImage  String?
+
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Post {
+  id          String       @id @default(cuid())
+  title       String
+  content     String       @db.Text
+  summary     String?      @db.Text
+  published   Boolean      @default(true)
+  category    PostCategory
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  upvoteCount Int         @default(0)
+
+  // Common fields that might be used across categories
+  featuredImage String?
+  images        String[]
+  tags          Tag[]
+  location      String?
+
+  // Author relationship
+  authorId    String
+  author      User        @relation(fields: [authorId], references: [id])
+
+  // Social interactions
+  comments    Comment[]
+
+  // Category-specific fields
+  eventDate           DateTime?    // For EVENTS
+  eventLocation       String?      // For EVENTS
+  eventRegistrationUrl String?     // For EVENTS, WEBINARS
+
+  videoUrl            String?      // For VIDEOS, WEBINARS
+  videoDuration       Int?         // For VIDEOS, WEBINARS, COURSES (in seconds)
+
+  bookAuthor         String?      // For BOOKS
+  bookISBN           String?      // For BOOKS
+  bookPublisher      String?      // For BOOKS
+  bookPublishDate    DateTime?    // For BOOKS
+
+  podcastHost        String?      // For PODCASTS
+  podcastUrl         String?      // For PODCASTS
+  podcastPlatforms   String[]     // For PODCASTS
+
+  courseInstructor   String?      // For COURSES
+  courseDuration     String?      // For COURSES
+  courseSkillLevel   String?      // For COURSES
+  coursePlatform     String?      // For COURSES
+
+  presentationVenue  String?      // For PRESENTATIONS
+  presentationDate   DateTime?    // For PRESENTATIONS
+
+  templateFileUrl    String?      // For TEMPLATES
+  templateFileType   String?      // For TEMPLATES
+
+  caseStudyCompany   String?      // For CASE_STUDIES
+  caseStudyIndustry  String?      // For CASE_STUDIES
+
+  whitepaperFileUrl  String?      // For WHITEPAPERS
+  whitepaperTopics   String[]     // For WHITEPAPERS
+
+  pressSource        String?      // For PRESS_RELEASES, NEWS
+  pressContactInfo   String?      // For PRESS_RELEASES
+
+  // Metadata
+  metadata    Json?       // For any additional category-specific fields
+
+  @@index([category])
+}
+
+model Comment {
+  id        String    @id @default(cuid())
+  content   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  authorId  String
+  author    User      @relation(fields: [authorId], references: [id])
+
+  postId    String
+  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  parentId  String?
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies   Comment[] @relation("CommentReplies")
+}
+
+model Follows {
+  followerId  String
+  follower    User     @relation("follower", fields: [followerId], references: [id])
+  followingId String
+  following   User     @relation("following", fields: [followingId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@id([followerId, followingId])
+}
+
+model Tag {
+  id    String @id @default(cuid())
+  name  String @unique
+  posts Post[]
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  type      String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  type      String
+  data      Json
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
