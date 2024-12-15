@@ -1,27 +1,18 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { PostCategory } from "@prisma/client";
-import { useSearchParams } from "next/navigation";
-import { Post, PostsResponse } from "@/lib/types";
+import type { PostsResponse } from "@/lib/types";
 
-export type { Post };
-
-export function usePosts() {
-  const searchParams = useSearchParams();
-  const categoryParam = searchParams.get("category");
-  const categories = categoryParam?.split(",") as PostCategory[] | undefined;
-
+export function useUserPosts(userId: string) {
   return useInfiniteQuery<PostsResponse>({
-    queryKey: ["posts", { categories }],
+    queryKey: ["user-posts", userId],
     queryFn: async ({ pageParam }) => {
       const params = new URLSearchParams();
       if (pageParam && typeof pageParam === "string") {
         params.set("cursor", pageParam);
       }
-      if (categories?.length) {
-        params.set("categories", categories.join(","));
-      }
 
-      const response = await fetch(`/api/posts?${params.toString()}`);
+      const response = await fetch(
+        `/api/users/${userId}/posts?${params.toString()}`
+      );
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
         throw new Error(

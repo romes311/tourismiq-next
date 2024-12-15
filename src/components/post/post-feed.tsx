@@ -12,6 +12,12 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useInView } from "react-intersection-observer";
 import { PostComments } from "@/components/post/post-comments";
+import { CreatePost } from "@/components/post/create-post";
+import { XMarkIcon } from "@heroicons/react/24/outline";
+import { useQueryClient } from "@tanstack/react-query";
+import type { InfiniteData } from "@tanstack/react-query";
+import type { PostsResponse } from "@/lib/types";
+import { VideoEmbed } from "@/components/ui/video-embed";
 
 interface Comment {
   id: string;
@@ -40,35 +46,6 @@ function JoinBanner() {
         <Link href="/login">
           <Button variant="outline">Sign In</Button>
         </Link>
-      </div>
-    </div>
-  );
-}
-
-function CreatePost() {
-  return (
-    <div className="rounded-lg border bg-white p-4 shadow-sm">
-      <div className="flex space-x-4">
-        <Image
-          src="https://api.dicebear.com/7.x/avataaars/svg?seed=current-user"
-          alt="Your avatar"
-          width={40}
-          height={40}
-          className="rounded-full"
-        />
-        <button
-          className="flex-1 rounded-md border bg-neutral-50 px-4 py-2 text-left text-sm text-neutral-500 hover:bg-neutral-100"
-          onClick={() => {
-            // TODO: Implement post creation modal with:
-            // - Rich text editor
-            // - Image upload
-            // - Category selection
-            // - Tag input
-            // - Preview functionality
-          }}
-        >
-          Share your travel experience...
-        </button>
       </div>
     </div>
   );
@@ -127,10 +104,57 @@ function formatCategory(category: PostCategory): string {
 }
 
 function PostCard({ post }: { post: Post }) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [comments, setComments] = useState<Comment[] | null>(null);
   const [showComments, setShowComments] = useState(false);
   const [isLoadingComments, setIsLoadingComments] = useState(false);
   const [commentCount, setCommentCount] = useState(post._count.comments);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!user?.id) return;
+    if (!confirm("Are you sure you want to delete this post?")) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/posts/${post.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to delete post");
+      }
+
+      // Remove the post from both caches
+      const updateCache = (old: InfiniteData<PostsResponse> | undefined) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            items: page.items.filter((p) => p.id !== post.id),
+          })),
+        };
+      };
+
+      queryClient.setQueryData<InfiniteData<PostsResponse>>(
+        ["posts", { categories: undefined }],
+        updateCache
+      );
+
+      queryClient.setQueryData<InfiniteData<PostsResponse>>(
+        ["user-posts", user.id],
+        updateCache
+      );
+    } catch (error) {
+      console.error("Failed to delete post:", error);
+      alert(error instanceof Error ? error.message : "Failed to delete post");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const handleComment = () => {
     setShowComments(!showComments);
@@ -188,13 +212,32 @@ function PostCard({ post }: { post: Post }) {
   const categoryColor = getCategoryColor(post.category);
 
   return (
-    <article className="overflow-hidden rounded-lg border bg-white shadow-sm">
-      {/* Featured Image */}
-      {post.featuredImage && (
+    <article className="relative overflow-hidden rounded-lg border bg-white shadow-sm">
+      {/* Delete Button - Show for admin or post author */}
+      {user && (user.role === "ADMIN" || user.id === post.authorId) && (
+        <button
+          onClick={handleDelete}
+          disabled={isDeleting}
+          className="absolute right-2 top-2 z-50 rounded-full bg-red-100 p-2 text-red-600 shadow-lg hover:bg-red-200 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+        >
+          <XMarkIcon className="h-6 w-6" />
+          {isDeleting && <span className="sr-only">Deleting...</span>}
+        </button>
+      )}
+
+      {/* Featured Media */}
+      {post.videoUrl ? (
+        <div className="p-4">
+          <VideoEmbed
+            url={post.videoUrl}
+            videoSource={post.metadata?.videoSource || "youtube"}
+          />
+        </div>
+      ) : post.featuredImage ? (
         <div>
           <PostImage src={post.featuredImage} alt={post.title} />
         </div>
-      )}
+      ) : null}
 
       <div className="p-6">
         {/* Category Badge */}
