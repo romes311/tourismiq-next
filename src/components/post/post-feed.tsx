@@ -9,8 +9,19 @@ import { PostCategory } from "@prisma/client";
 import { formatDistanceToNow } from "date-fns";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useInView } from "react-intersection-observer";
+import { PostComments } from "@/components/post/post-comments";
+
+interface Comment {
+  id: string;
+  content: string;
+  createdAt: Date;
+  author: {
+    name: string | null;
+    image: string | null;
+  };
+}
 
 function JoinBanner() {
   return (
@@ -116,8 +127,58 @@ function formatCategory(category: PostCategory): string {
 }
 
 function PostCard({ post }: { post: Post }) {
+  const [comments, setComments] = useState<Comment[] | null>(null);
+  const [showComments, setShowComments] = useState(false);
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [commentCount, setCommentCount] = useState(post._count.comments);
+
   const handleComment = () => {
-    console.log("Comment on post:", post.id);
+    setShowComments(!showComments);
+    if (!showComments && !comments) {
+      loadComments();
+    }
+  };
+
+  const loadComments = async () => {
+    setIsLoadingComments(true);
+    try {
+      const response = await fetch(`/api/posts/${post.id}/comments`);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to load comments");
+      }
+      const data = await response.json();
+      setComments(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Failed to load comments:", error);
+      setComments([]);
+    } finally {
+      setIsLoadingComments(false);
+    }
+  };
+
+  const handleAddComment = async (content: string) => {
+    try {
+      const response = await fetch(`/api/posts/${post.id}/comments`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ content }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to add comment");
+      }
+
+      const newComment = await response.json();
+      setComments((prev) => [newComment, ...(prev || [])]);
+      setCommentCount((prev) => prev + 1);
+    } catch (error) {
+      console.error("Failed to add comment:", error);
+      throw error;
+    }
   };
 
   const handleShare = () => {
@@ -203,11 +264,41 @@ function PostCard({ post }: { post: Post }) {
           <PostButtons
             postId={post.id}
             upvoteCount={post.upvoteCount}
-            commentCount={post._count.comments}
+            commentCount={commentCount}
             onComment={handleComment}
             onShare={handleShare}
           />
         </div>
+
+        {/* Comments Section */}
+        {showComments && (
+          <div className="border-t">
+            {isLoadingComments ? (
+              <div className="p-4 text-center">
+                <LoadingSpinner />
+              </div>
+            ) : (
+              <div className="p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-neutral-900">
+                    Comments ({commentCount})
+                  </h3>
+                  <button
+                    onClick={() => setShowComments(false)}
+                    className="text-sm text-neutral-500 hover:text-neutral-700"
+                  >
+                    Hide comments
+                  </button>
+                </div>
+                <PostComments
+                  postId={post.id}
+                  comments={comments}
+                  onAddComment={handleAddComment}
+                />
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </article>
   );

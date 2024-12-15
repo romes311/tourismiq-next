@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { PostCategory } from "@prisma/client";
 
 const POSTS_PER_PAGE = 5;
 
@@ -7,6 +8,10 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const cursor = searchParams.get("cursor");
+    const categoriesParam = searchParams.get("categories");
+    const categories = categoriesParam?.split(",") as
+      | PostCategory[]
+      | undefined;
     const limit = Number(searchParams.get("limit")) || POSTS_PER_PAGE;
 
     const posts = await prisma.post.findMany({
@@ -17,6 +22,13 @@ export async function GET(request: Request) {
           id: cursor,
         },
       }),
+      where: {
+        ...(categories?.length && {
+          category: {
+            in: categories,
+          },
+        }),
+      },
       select: {
         id: true,
         title: true,

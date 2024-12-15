@@ -14,7 +14,7 @@ export default function HomePage() {
         <div className="flex gap-6">
           {/* Left sidebar */}
           <div className="hidden w-64 shrink-0 lg:block">
-            <div className="sticky top-20">
+            <div className="fixed top-[5rem] w-64">
               <SidebarNav />
             </div>
           </div>
@@ -25,8 +25,8 @@ export default function HomePage() {
           </main>
 
           {/* Right sidebar */}
-          <div className="hidden xl:block">
-            <div className="sticky top-20">
+          <div className="hidden w-64 shrink-0 xl:block">
+            <div className="fixed top-[5rem] w-64">
               <FriendsSidebar />
             </div>
           </div>

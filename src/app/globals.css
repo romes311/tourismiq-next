@@ -12,8 +12,12 @@
 }
 
 @layer base {
+  html {
+    font-size: 16px;
+  }
+
   body {
-    @apply bg-neutral-50;
+    @apply bg-neutral-50 text-lg;
     color: var(--primary-text);
   }
 }

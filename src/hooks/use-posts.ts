@@ -1,5 +1,6 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { PostCategory } from "@prisma/client";
+import { useSearchParams } from "next/navigation";
 
 export type Post = {
   id: string;
@@ -29,12 +30,19 @@ interface PostsResponse {
 }
 
 export function usePosts() {
+  const searchParams = useSearchParams();
+  const categoryParam = searchParams.get("category");
+  const categories = categoryParam?.split(",") as PostCategory[] | undefined;
+
   return useInfiniteQuery<PostsResponse>({
-    queryKey: ["posts"],
+    queryKey: ["posts", { categories }],
     queryFn: async ({ pageParam }) => {
       const params = new URLSearchParams();
       if (pageParam && typeof pageParam === "string") {
         params.set("cursor", pageParam);
+      }
+      if (categories?.length) {
+        params.set("categories", categories.join(","));
       }
 
       const response = await fetch(`/api/posts?${params.toString()}`);
