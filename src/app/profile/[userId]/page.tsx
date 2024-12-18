@@ -8,16 +8,13 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { PostCard } from "@/components/post/post-card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ImageCropModal } from "@/components/profile/image-crop-modal";
-import { useSession } from "next-auth/react";
-import { signOut, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useMessages } from "@/hooks/use-messages";
 import { format } from "date-fns";
@@ -33,24 +30,110 @@ type Tab =
   | "qa"
   | "score";
 
+interface ProfileUpdateData {
+  name: string;
+  businessName: string;
+  location: string;
+  bio: string;
+  occupation: string;
+  facebook: string;
+  twitter: string;
+  linkedin: string;
+  instagram: string;
+}
+
+interface Connection {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  status: "PENDING" | "ACCEPTED" | "REJECTED";
+  createdAt: string;
+  updatedAt: string;
+  sender: {
+    id: string;
+    name: string | null;
+    image: string | null;
+  };
+  receiver: {
+    id: string;
+    name: string | null;
+    image: string | null;
+  };
+}
+
 export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<Tab>("about");
   const [isEditing, setIsEditing] = useState(false);
   const { userId } = useParams();
   const { user: currentUser } = useAuth();
-  const { data: session, update: updateSession } = useSession();
   const queryClient = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab") as Tab | null;
   const isOwnProfile = currentUser?.id === userId;
 
+  const { data: pendingConnections } = useQuery<{
+    received: Connection[];
+    sent: Connection[];
+  }>({
+    queryKey: ["pending-connections", userId],
+    queryFn: async () => {
+      console.log("Fetching pending connections for userId:", userId);
+      const response = await fetch(
+        `/api/users/${userId}/connections?status=PENDING`
+      );
+      if (!response.ok) {
+        throw new Error("Failed to fetch pending connections");
+      }
+      const data = await response.json();
+      console.log("Pending connections data:", data);
+      return data;
+    },
+    enabled:
+      isOwnProfile &&
+      (activeTab === "connections" || tabParam === "connections"),
+    refetchInterval: activeTab === "connections" ? 5000 : false,
+  });
+
+  const tabs = useMemo(
+    () => [
+      { id: "about", label: "About" } as const,
+      { id: "posts", label: "Posts" } as const,
+      {
+        id: "connections",
+        label: "Connections",
+        notification:
+          isOwnProfile && pendingConnections?.received?.length
+            ? pendingConnections.received.length
+            : undefined,
+      } as const,
+      { id: "messages", label: "Messages" } as const,
+      { id: "comments", label: "Comments" } as const,
+      { id: "bookmarks", label: "Bookmarks" } as const,
+      { id: "qa", label: "Q&A" } as const,
+      { id: "score", label: "Score" } as const,
+    ],
+    [isOwnProfile, pendingConnections?.received?.length]
+  );
+
+  const [formData, setFormData] = useState<ProfileUpdateData>({
+    name: "",
+    businessName: "",
+    location: "",
+    bio: "",
+    occupation: "",
+    facebook: "",
+    twitter: "",
+    linkedin: "",
+    instagram: "",
+  });
+
   // Set active tab from URL parameter
   useEffect(() => {
     if (tabParam && tabs.some((tab) => tab.id === tabParam)) {
       setActiveTab(tabParam);
     }
-  }, [tabParam]);
+  }, [tabParam, tabs]);
 
   // Update URL when tab changes
   const handleTabChange = (tab: Tab) => {
@@ -69,30 +152,6 @@ export default function ProfilePage() {
       });
     }
   };
-
-  const [formData, setFormData] = useState<{
-    name: string;
-    businessName: string;
-    location: string;
-    bio: string;
-    occupation: string;
-    canPostCDME: boolean;
-    facebook: string;
-    twitter: string;
-    linkedin: string;
-    instagram: string;
-  }>({
-    name: "",
-    businessName: "",
-    location: "",
-    bio: "",
-    occupation: "",
-    canPostCDME: false,
-    facebook: "",
-    twitter: "",
-    linkedin: "",
-    instagram: "",
-  });
 
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -118,7 +177,6 @@ export default function ProfilePage() {
         location: profile.user.location || "",
         bio: profile.user.bio || "",
         occupation: profile.user.occupation || "",
-        canPostCDME: profile.user.canPostCDME || false,
         facebook: profile.user.socialLinks?.facebook || "",
         twitter: profile.user.socialLinks?.twitter || "",
         linkedin: profile.user.socialLinks?.linkedin || "",
@@ -145,17 +203,21 @@ export default function ProfilePage() {
     },
     onSuccess: (data) => {
       // Update auth data in cache
-      queryClient.setQueryData(["auth"], (oldData: any) => {
-        if (!oldData?.user) return oldData;
-        return {
-          ...oldData,
-          user: {
-            ...oldData.user,
-            name: data.user.name,
-            businessName: data.user.businessName,
-          },
-        };
-      });
+      queryClient.setQueryData(
+        ["auth"],
+        (
+          oldData: { user: { id: string; image: string | null } } | undefined
+        ) => {
+          if (!oldData?.user) return oldData;
+          return {
+            ...oldData,
+            user: {
+              ...oldData.user,
+              image: data.user.image,
+            },
+          };
+        }
+      );
 
       // Invalidate and refetch all necessary queries
       Promise.all([
@@ -180,26 +242,6 @@ export default function ProfilePage() {
   } = useUserPosts(userId as string);
 
   // Add connection queries
-  const { data: pendingConnections } = useQuery({
-    queryKey: ["pending-connections", userId],
-    queryFn: async () => {
-      console.log("Fetching pending connections for userId:", userId);
-      const response = await fetch(
-        `/api/users/${userId}/connections?status=PENDING`
-      );
-      if (!response.ok) {
-        throw new Error("Failed to fetch pending connections");
-      }
-      const data = await response.json();
-      console.log("Pending connections data:", data);
-      return data;
-    },
-    enabled:
-      isOwnProfile &&
-      (activeTab === "connections" || tabParam === "connections"),
-    refetchInterval: activeTab === "connections" ? 5000 : false, // Refetch every 5 seconds when on connections tab
-  });
-
   const { data: acceptedConnections } = useQuery({
     queryKey: ["accepted-connections", userId],
     queryFn: async () => {
@@ -217,24 +259,6 @@ export default function ProfilePage() {
     enabled: activeTab === "connections" || tabParam === "connections",
     refetchInterval: activeTab === "connections" ? 5000 : false, // Refetch every 5 seconds when on connections tab
   });
-
-  const tabs: { id: Tab; label: string; notification?: number }[] = [
-    { id: "about", label: "About" },
-    { id: "posts", label: "Posts" },
-    {
-      id: "connections",
-      label: "Connections",
-      notification:
-        isOwnProfile && pendingConnections?.received?.length > 0
-          ? pendingConnections.received.length
-          : undefined,
-    },
-    { id: "messages", label: "Messages" },
-    { id: "comments", label: "Comments" },
-    { id: "bookmarks", label: "Bookmarks" },
-    { id: "qa", label: "Q&A" },
-    { id: "score", label: "Score" },
-  ];
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -277,85 +301,22 @@ export default function ProfilePage() {
         throw new Error("Failed to upload image");
       }
 
-      const { imageUrl, user: updatedUser } = await response.json();
-      console.log("Received updated user:", updatedUser);
+      const { imageUrl } = await response.json();
+      console.log("Image uploaded successfully:", imageUrl);
 
-      // Update the session with the new image
-      await updateSession({
-        user: {
-          ...session?.user,
-          image: imageUrl,
-        },
-      });
+      // Invalidate all queries that contain user data
+      queryClient.invalidateQueries({ queryKey: ["profile"] });
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+      queryClient.invalidateQueries({ queryKey: ["user-posts"] });
+      queryClient.invalidateQueries({ queryKey: ["auth"] });
 
-      // Update the profile query data
-      queryClient.setQueryData(["profile", userId], (oldData: any) => {
-        if (!oldData) return oldData;
-        return {
-          ...oldData,
-          user: {
-            ...oldData.user,
-            image: imageUrl,
-          },
-        };
-      });
-
-      // Update all posts queries to reflect the new image
-      queryClient.setQueriesData({ queryKey: ["posts"] }, (oldData: any) => {
-        if (!oldData) return oldData;
-        return {
-          ...oldData,
-          pages: oldData.pages.map((page: any) => ({
-            ...page,
-            items: page.items.map((post: any) =>
-              post.author.id === userId
-                ? {
-                    ...post,
-                    author: {
-                      ...post.author,
-                      image: imageUrl,
-                    },
-                  }
-                : post
-            ),
-          })),
-        };
-      });
-
-      // Update user posts query
-      queryClient.setQueriesData(
-        { queryKey: ["user-posts", userId] },
-        (oldData: any) => {
-          if (!oldData) return oldData;
-          return {
-            ...oldData,
-            pages: oldData.pages.map((page: any) => ({
-              ...page,
-              items: page.items.map((post: any) => ({
-                ...post,
-                author: {
-                  ...post.author,
-                  image: imageUrl,
-                },
-              })),
-            })),
-          };
-        }
-      );
-
-      // Invalidate and refetch all necessary queries
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["profile", userId] }),
-        queryClient.invalidateQueries({ queryKey: ["posts"] }),
-        queryClient.invalidateQueries({ queryKey: ["user-posts", userId] }),
-        queryClient.invalidateQueries({ queryKey: ["auth"] }),
-      ]);
+      // Force a router refresh to update all components
+      router.refresh();
 
       setCropModalOpen(false);
       setSelectedImage(null);
     } catch (error) {
       console.error("Error uploading image:", error);
-      // You might want to show a toast notification here
     }
   };
 
@@ -428,10 +389,10 @@ export default function ProfilePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["pending-connections", userId],
+        queryKey: ["pending-connections", userId as string],
       });
       queryClient.invalidateQueries({
-        queryKey: ["accepted-connections", userId],
+        queryKey: ["accepted-connections", userId as string],
       });
     },
   });
@@ -962,76 +923,95 @@ export default function ProfilePage() {
         return (
           <div className="space-y-8">
             {/* Pending Connections Section */}
-            {isOwnProfile && pendingConnections?.received?.length > 0 && (
-              <div className="bg-white rounded-xl p-6 shadow-sm">
-                <div className="flex items-center space-x-2 mb-6">
-                  <div className="h-8 w-1 bg-primary rounded-full" />
-                  <h2 className="text-xl font-semibold text-neutral-900">
-                    Pending Requests ({pendingConnections.received.length})
-                  </h2>
-                </div>
-                <div className="space-y-4">
-                  {pendingConnections.received.map((connection: any) => (
-                    <div
-                      key={connection.id}
-                      className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg"
-                    >
-                      <div className="flex items-center space-x-4">
-                        <Image
-                          src={
-                            connection.sender.image ||
-                            `https://api.dicebear.com/7.x/avataaars/svg?seed=${connection.sender.name}`
-                          }
-                          alt={connection.sender.name}
-                          width={48}
-                          height={48}
-                          className="rounded-full"
-                        />
-                        <div>
-                          <Link
-                            href={`/profile/${connection.sender.id}`}
-                            className="font-medium text-neutral-900 hover:text-primary"
-                          >
-                            {connection.sender.name}
-                          </Link>
-                          <p className="text-sm text-neutral-500">
-                            Sent{" "}
-                            {new Date(
-                              connection.createdAt
-                            ).toLocaleDateString()}
-                          </p>
+            {isOwnProfile &&
+              pendingConnections?.received &&
+              pendingConnections.received.length > 0 && (
+                <div className="bg-white rounded-xl p-6 shadow-sm">
+                  <div className="flex items-center space-x-2 mb-6">
+                    <div className="h-8 w-1 bg-primary rounded-full" />
+                    <h2 className="text-xl font-semibold text-neutral-900">
+                      Pending Requests ({pendingConnections.received.length})
+                    </h2>
+                  </div>
+                  <div className="space-y-4">
+                    {pendingConnections.received.map(
+                      (connection: Connection) => (
+                        <div
+                          key={connection.id}
+                          className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg"
+                        >
+                          <div className="flex items-center space-x-4">
+                            {connection.sender.image ? (
+                              <Image
+                                src={connection.sender.image}
+                                alt={connection.sender.name || "User"}
+                                width={48}
+                                height={48}
+                                className="rounded-full"
+                              />
+                            ) : (
+                              <div className="w-12 h-12 bg-neutral-100 rounded-full flex items-center justify-center text-neutral-600">
+                                <svg
+                                  className="w-6 h-6"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                                  />
+                                </svg>
+                              </div>
+                            )}
+                            <div>
+                              <Link
+                                href={`/profile/${connection.sender.id}`}
+                                className="font-medium text-neutral-900 hover:text-primary"
+                              >
+                                {connection.sender.name}
+                              </Link>
+                              <p className="text-sm text-neutral-500">
+                                Sent{" "}
+                                {new Date(
+                                  connection.createdAt
+                                ).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              onClick={() =>
+                                handleConnectionAction.mutate({
+                                  userId: connection.sender.id,
+                                  action: "accept",
+                                })
+                              }
+                              disabled={handleConnectionAction.isPending}
+                            >
+                              Accept
+                            </Button>
+                            <Button
+                              onClick={() =>
+                                handleConnectionAction.mutate({
+                                  userId: connection.sender.id,
+                                  action: "reject",
+                                })
+                              }
+                              disabled={handleConnectionAction.isPending}
+                              variant="outline"
+                            >
+                              Decline
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          onClick={() =>
-                            handleConnectionAction.mutate({
-                              userId: connection.sender.id,
-                              action: "accept",
-                            })
-                          }
-                          disabled={handleConnectionAction.isPending}
-                        >
-                          Accept
-                        </Button>
-                        <Button
-                          onClick={() =>
-                            handleConnectionAction.mutate({
-                              userId: connection.sender.id,
-                              action: "reject",
-                            })
-                          }
-                          disabled={handleConnectionAction.isPending}
-                          variant="outline"
-                        >
-                          Decline
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                      )
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             {/* Connections Section */}
             <div className="bg-white rounded-xl p-6 shadow-sm">
@@ -1043,84 +1023,101 @@ export default function ProfilePage() {
               </div>
               {acceptedConnections?.connections?.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {acceptedConnections.connections.map((connection: any) => {
-                    const connectedUser =
-                      connection.sender.id === userId
-                        ? connection.receiver
-                        : connection.sender;
-                    return (
-                      <div
-                        key={connection.id}
-                        className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg"
-                      >
-                        <div className="flex items-center space-x-4">
-                          <Image
-                            src={
-                              connectedUser.image ||
-                              `https://api.dicebear.com/7.x/avataaars/svg?seed=${connectedUser.name}`
-                            }
-                            alt={connectedUser.name}
-                            width={48}
-                            height={48}
-                            className="rounded-full"
-                          />
-                          <div>
-                            <Link
-                              href={`/profile/${connectedUser.id}`}
-                              className="font-medium text-neutral-900 hover:text-primary"
-                            >
-                              {connectedUser.name}
-                            </Link>
-                            <p className="text-sm text-neutral-500">
-                              Connected{" "}
-                              {new Date(
-                                connection.updatedAt
-                              ).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-                        {isOwnProfile && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            onClick={() =>
-                              deleteConnection.mutate(connection.id)
-                            }
-                            disabled={deleteConnection.isPending}
-                          >
-                            {deleteConnection.isPending ? (
-                              <span className="flex items-center gap-2">
+                  {acceptedConnections.connections.map(
+                    (connection: Connection) => {
+                      const connectedUser =
+                        connection.sender.id === userId
+                          ? connection.receiver
+                          : connection.sender;
+                      return (
+                        <div
+                          key={connection.id}
+                          className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg"
+                        >
+                          <div className="flex items-center space-x-4">
+                            {connectedUser.image ? (
+                              <Image
+                                src={connectedUser.image}
+                                alt={connectedUser.name || "User"}
+                                width={48}
+                                height={48}
+                                className="rounded-full"
+                              />
+                            ) : (
+                              <div className="w-12 h-12 bg-neutral-100 rounded-full flex items-center justify-center text-neutral-600">
                                 <svg
-                                  className="animate-spin h-4 w-4"
-                                  xmlns="http://www.w3.org/2000/svg"
+                                  className="w-6 h-6"
                                   fill="none"
                                   viewBox="0 0 24 24"
+                                  stroke="currentColor"
                                 >
-                                  <circle
-                                    className="opacity-25"
-                                    cx="12"
-                                    cy="12"
-                                    r="10"
-                                    stroke="currentColor"
-                                    strokeWidth="4"
-                                  />
                                   <path
-                                    className="opacity-75"
-                                    fill="currentColor"
-                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
                                   />
                                 </svg>
-                                Removing...
-                              </span>
-                            ) : (
-                              "Remove"
+                              </div>
                             )}
-                          </Button>
-                        )}
-                      </div>
-                    );
-                  })}
+                            <div>
+                              <Link
+                                href={`/profile/${connectedUser.id}`}
+                                className="font-medium text-neutral-900 hover:text-primary"
+                              >
+                                {connectedUser.name}
+                              </Link>
+                              <p className="text-sm text-neutral-500">
+                                Connected{" "}
+                                {new Date(
+                                  connection.updatedAt
+                                ).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                          {isOwnProfile && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() =>
+                                deleteConnection.mutate(connection.id)
+                              }
+                              disabled={deleteConnection.isPending}
+                            >
+                              {deleteConnection.isPending ? (
+                                <span className="flex items-center gap-2">
+                                  <svg
+                                    className="animate-spin h-4 w-4"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <circle
+                                      className="opacity-25"
+                                      cx="12"
+                                      cy="12"
+                                      r="10"
+                                      stroke="currentColor"
+                                      strokeWidth="4"
+                                    />
+                                    <path
+                                      className="opacity-75"
+                                      fill="currentColor"
+                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                    />
+                                  </svg>
+                                  Removing...
+                                </span>
+                              ) : (
+                                "Remove"
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    }
+                  )}
                 </div>
               ) : (
                 <p className="text-neutral-600 text-center">
@@ -1133,7 +1130,7 @@ export default function ProfilePage() {
       case "messages":
         return (
           <div className="bg-white rounded-xl p-6 shadow-sm">
-            <MessagesTab userId={userId} />
+            <MessagesTab userId={userId as string} />
           </div>
         );
       default:
@@ -1153,21 +1150,36 @@ export default function ProfilePage() {
         <div className="p-6 mb-8">
           <div className="flex items-center space-x-6">
             <div className="relative group">
-              <Image
-                src={
-                  profile.user.image ||
-                  `https://api.dicebear.com/7.x/avataaars/svg?seed=${
-                    isEditing ? formData.name : profile.user.name
-                  }`
-                }
-                alt={isEditing ? formData.name : profile.user.name || "Profile"}
-                width={128}
-                height={128}
-                className={cn(
-                  "rounded-full border-4 border-white shadow-lg",
-                  isEditing && "opacity-85 transition-opacity"
-                )}
-              />
+              {profile.user.image ? (
+                <Image
+                  src={profile.user.image}
+                  alt={
+                    isEditing ? formData.name : profile.user.name || "Profile"
+                  }
+                  width={128}
+                  height={128}
+                  className={cn(
+                    "rounded-full border-4 border-white shadow-lg",
+                    isEditing && "opacity-85 transition-opacity"
+                  )}
+                />
+              ) : (
+                <div className="w-32 h-32 bg-neutral-100 rounded-full flex items-center justify-center text-neutral-600 border-4 border-white shadow-lg">
+                  <svg
+                    className="w-16 h-16"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                    />
+                  </svg>
+                </div>
+              )}
               {isEditing && (
                 <div className="absolute inset-0 flex items-center justify-center">
                   <label
@@ -1287,6 +1299,11 @@ function MessagesTab({ userId }: { userId: string }) {
     sendMessage,
     isSending,
   } = useMessages(selectedConversationId);
+
+  // Use the userId parameter in the component
+  useEffect(() => {
+    console.log("Messages tab mounted for user:", userId);
+  }, [userId]);
 
   const selectedConversation = conversations?.find(
     (c) => c.id === selectedConversationId

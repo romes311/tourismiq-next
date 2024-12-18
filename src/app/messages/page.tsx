@@ -85,16 +85,31 @@ export default function MessagesPage() {
                       )}
                     >
                       <div className="flex items-center space-x-3">
-                        <Image
-                          src={
-                            participant.image ||
-                            `https://api.dicebear.com/7.x/avataaars/svg?seed=${participant.name}`
-                          }
-                          alt={participant.name || "User"}
-                          width={40}
-                          height={40}
-                          className="rounded-full"
-                        />
+                        {participant.image ? (
+                          <Image
+                            src={participant.image}
+                            alt={participant.name || "User"}
+                            width={40}
+                            height={40}
+                            className="rounded-full"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 bg-neutral-100 rounded-full flex items-center justify-center text-neutral-600">
+                            <svg
+                              className="w-5 h-5"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                              />
+                            </svg>
+                          </div>
+                        )}
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-neutral-900 truncate">
                             {participant.name}
@@ -129,16 +144,31 @@ export default function MessagesPage() {
               {/* Chat Header */}
               <div className="p-4 border-b">
                 <div className="flex items-center space-x-3">
-                  <Image
-                    src={
-                      recipient?.image ||
-                      `https://api.dicebear.com/7.x/avataaars/svg?seed=${recipient?.name}`
-                    }
-                    alt={recipient?.name || "User"}
-                    width={40}
-                    height={40}
-                    className="rounded-full"
-                  />
+                  {recipient?.image ? (
+                    <Image
+                      src={recipient.image}
+                      alt={recipient.name || "User"}
+                      width={40}
+                      height={40}
+                      className="rounded-full"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 bg-neutral-100 rounded-full flex items-center justify-center text-neutral-600">
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                        />
+                      </svg>
+                    </div>
+                  )}
                   <div>
                     <h2 className="font-medium text-neutral-900">
                       {recipient?.name}

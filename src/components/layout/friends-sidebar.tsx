@@ -11,19 +11,19 @@ const mockFriends = [
     id: "1",
     name: "Alice Johnson",
     role: "Tour Guide",
-    image: "https://api.dicebear.com/7.x/avataaars/svg?seed=Alice",
+    image: null,
   },
   {
     id: "2",
     name: "Bob Smith",
     role: "Hotel Owner",
-    image: "https://api.dicebear.com/7.x/avataaars/svg?seed=Bob",
+    image: null,
   },
   {
     id: "3",
     name: "Carol White",
     role: "Travel Agent",
-    image: "https://api.dicebear.com/7.x/avataaars/svg?seed=Carol",
+    image: null,
   },
 ];
 
@@ -53,13 +53,31 @@ export function FriendsSidebar() {
             key={friend.id}
             className="flex items-center space-x-3 rounded-lg p-2 hover:bg-neutral-100"
           >
-            <Image
-              src={friend.image}
-              alt={friend.name}
-              width={40}
-              height={40}
-              className="rounded-full"
-            />
+            {friend.image ? (
+              <Image
+                src={friend.image}
+                alt={friend.name}
+                width={32}
+                height={32}
+                className="rounded-full"
+              />
+            ) : (
+              <div className="w-8 h-8 bg-neutral-100 rounded-full flex items-center justify-center text-neutral-600">
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                  />
+                </svg>
+              </div>
+            )}
             <div>
               <p className="text-sm font-medium text-neutral-900">
                 {friend.name}

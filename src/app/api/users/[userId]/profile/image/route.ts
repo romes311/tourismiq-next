@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
 import { writeFile } from "fs/promises";
 import { join } from "path";
-import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { pusherServer } from "@/lib/pusher";
 
 const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
 const VALID_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 const paramsSchema = z.object({
-  userId: z.string().min(1, "User ID is required"),
+  userId: z.string(),
 });
 
 export async function POST(
@@ -59,34 +60,34 @@ export async function POST(
     const buffer = Buffer.from(bytes);
 
     // Save the file to public/uploads
-    const path = join(process.cwd(), "public", "uploads", filename);
-    await writeFile(path, buffer);
+    const uploadDir = join(process.cwd(), "public", "uploads");
+    const filePath = join(uploadDir, filename);
+    await writeFile(filePath, buffer);
 
     // Update the user's profile image in the database
     const imageUrl = `/uploads/${filename}`;
-    console.log("Updating user image to:", imageUrl);
-
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: { image: imageUrl },
       select: {
         id: true,
         name: true,
-        email: true,
         image: true,
-        role: true,
       },
     });
 
-    console.log("Updated user:", updatedUser);
-
-    // Return both the image URL and the updated user data
-    return NextResponse.json({
-      imageUrl,
+    // Trigger Pusher event for real-time update
+    await pusherServer.trigger("user-updates", `profile-update-${userId}`, {
+      type: "PROFILE_IMAGE_UPDATE",
       user: updatedUser,
     });
+
+    return NextResponse.json({ imageUrl });
   } catch (error) {
-    console.error("Error uploading image:", error);
-    return new NextResponse("Error uploading image", { status: 500 });
+    console.error("Error in profile image upload:", error);
+    return new NextResponse(
+      error instanceof Error ? error.message : "Internal Server Error",
+      { status: 500 }
+    );
   }
 }

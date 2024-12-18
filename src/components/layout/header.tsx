@@ -26,10 +26,17 @@ import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 
 export function Header() {
-  const { user, isAuthenticated } = useAuth();
+  const { user: authUser, isAuthenticated } = useAuth();
   const router = useRouter();
-  const { notifications, unreadCount, markAsRead, markAllAsRead } =
+  const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } =
     useNotifications();
+
+  const { data: user } = useQuery({
+    queryKey: ["auth"],
+    queryFn: () => ({ user: authUser }),
+    initialData: { user: authUser },
+    enabled: !!authUser,
+  });
 
   const { data: unreadMessageCount } = useQuery({
     queryKey: ["unread-messages"],
@@ -97,7 +104,9 @@ export function Header() {
                 variant="ghost"
                 size="icon"
                 className="relative text-neutral-500 hover:text-primary"
-                onClick={() => router.push(`/profile/${user?.id}?tab=messages`)}
+                onClick={() =>
+                  router.push(`/profile/${user?.user?.id}?tab=messages`)
+                }
               >
                 <ChatBubbleLeftIcon className="h-5 w-5" />
                 {unreadMessageCount?.count > 0 && (
@@ -185,7 +194,7 @@ export function Header() {
                                     }
                                     // Navigate to the connections tab
                                     router.push(
-                                      `/profile/${user?.id}?tab=connections`
+                                      `/profile/${user?.user?.id}?tab=connections`
                                     );
                                     // Mark as read
                                     if (!notification.read) {
@@ -211,7 +220,7 @@ export function Header() {
                                     }
                                     // Navigate to the connections tab
                                     router.push(
-                                      `/profile/${user?.id}?tab=connections`
+                                      `/profile/${user?.user?.id}?tab=connections`
                                     );
                                     // Mark as read
                                     if (!notification.read) {
@@ -232,28 +241,58 @@ export function Header() {
                       </p>
                     )}
                   </ScrollArea>
+                  {notifications.length > 0 && (
+                    <div className="border-t p-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearAll}
+                        className="w-full text-neutral-600 hover:text-red-600"
+                      >
+                        Clear All
+                      </Button>
+                    </div>
+                  )}
                 </PopoverContent>
               </Popover>
 
               <Menu as="div" className="relative">
-                <Menu.Button className="flex items-center justify-center rounded-full overflow-hidden hover:ring-2 hover:ring-primary/20 transition-all">
-                  <Image
-                    src={
-                      user?.image ||
-                      `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name}`
-                    }
-                    alt="Your avatar"
-                    width={36}
-                    height={36}
-                    className="rounded-full transition-all duration-300 ease-in-out"
-                  />
+                <Menu.Button className="flex items-center space-x-2">
+                  {user?.user?.image ? (
+                    <Image
+                      src={user.user.image}
+                      alt={user.user.name || "Your profile"}
+                      width={32}
+                      height={32}
+                      className="rounded-full"
+                      priority
+                    />
+                  ) : (
+                    <div className="w-8 h-8 bg-neutral-100 rounded-full flex items-center justify-center text-neutral-600">
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                        />
+                      </svg>
+                    </div>
+                  )}
                 </Menu.Button>
 
                 <Menu.Items className="absolute right-0 mt-2 w-48 origin-top-right rounded-lg bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
                   <Menu.Item>
                     {({ active }) => (
                       <button
-                        onClick={() => router.push(`/profile/${user?.id}`)}
+                        onClick={() =>
+                          router.push(`/profile/${user?.user?.id}`)
+                        }
                         className={`${
                           active
                             ? "bg-neutral-50 text-primary"

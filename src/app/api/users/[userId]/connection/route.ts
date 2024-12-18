@@ -3,14 +3,10 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { ConnectionStatus } from "@prisma/client";
+import { sendNotification } from "@/lib/notifications";
 
 const paramsSchema = z.object({
   userId: z.string().min(1, "User ID is required"),
-});
-
-const actionSchema = z.object({
-  action: z.enum(["accept", "reject"]),
 });
 
 // Get connection status
@@ -19,37 +15,13 @@ export async function GET(
   context: { params: { userId: string } }
 ) {
   try {
-    const params = await context.params;
-    console.log("GET Connection - Raw params:", params);
-    console.log("GET Connection - userId:", params.userId);
-
     const session = await getServerSession(authOptions);
-    console.log("GET Connection - Session:", {
-      userId: session?.user?.id,
-      isAuthenticated: !!session?.user,
-    });
-
     if (!session?.user?.id) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    // Parse and validate the userId
-    const result = paramsSchema.safeParse({ userId: params.userId });
-    console.log("GET Connection - Validation result:", {
-      success: result.success,
-      errors: !result.success ? result.error.errors : null,
-    });
-
-    if (!result.success) {
-      console.error("Invalid params:", result.error.errors);
-      return NextResponse.json(
-        { error: "Invalid user ID", details: result.error.errors },
-        { status: 400 }
-      );
-    }
-
-    const { userId } = result.data;
-    console.log("GET Connection - Validated userId:", userId);
+    const params = await Promise.resolve(context.params);
+    const { userId } = paramsSchema.parse(params);
 
     // Find connection in either direction
     const connection = await prisma.connection.findFirst({
@@ -60,11 +32,6 @@ export async function GET(
         ],
       },
     });
-
-    console.log("GET Connection - Found connection:", connection);
-    if (!connection) {
-      return NextResponse.json(null);
-    }
 
     return NextResponse.json(connection);
   } catch (error) {
@@ -82,41 +49,16 @@ export async function POST(
   context: { params: { userId: string } }
 ) {
   try {
-    const params = await context.params;
-    console.log("POST Connection - Raw params:", params);
-    console.log("POST Connection - userId:", params.userId);
-
     const session = await getServerSession(authOptions);
-    console.log("POST Connection - Session:", {
-      userId: session?.user?.id,
-      isAuthenticated: !!session?.user,
-    });
-
     if (!session?.user?.id) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    // Parse and validate the userId
-    const result = paramsSchema.safeParse({ userId: params.userId });
-    console.log("POST Connection - Validation result:", {
-      success: result.success,
-      errors: !result.success ? result.error.errors : null,
-    });
+    const params = await Promise.resolve(context.params);
+    const { userId } = paramsSchema.parse(params);
 
-    if (!result.success) {
-      console.error("Invalid params:", result.error.errors);
-      return NextResponse.json(
-        { error: "Invalid user ID", details: result.error.errors },
-        { status: 400 }
-      );
-    }
-
-    const { userId } = result.data;
-    console.log("POST Connection - Validated userId:", userId);
-
-    // Prevent self-connection
+    // Check if users are the same
     if (session.user.id === userId) {
-      console.log("POST Connection - Attempted self-connection");
       return NextResponse.json(
         { error: "Cannot connect with yourself" },
         { status: 400 }
@@ -127,67 +69,67 @@ export async function POST(
     const existingConnection = await prisma.connection.findFirst({
       where: {
         OR: [
-          { senderId: session.user.id, receiverId: userId },
-          { senderId: userId, receiverId: session.user.id },
+          {
+            senderId: session.user.id,
+            receiverId: userId,
+          },
+          {
+            senderId: userId,
+            receiverId: session.user.id,
+          },
         ],
       },
     });
 
-    console.log("POST Connection - Existing connection:", existingConnection);
-
-    if (existingConnection) {
-      // If there's a rejected connection, delete it and allow a new request
-      if (existingConnection.status === "REJECTED") {
-        await prisma.connection.delete({
-          where: { id: existingConnection.id },
-        });
-      } else {
-        return NextResponse.json(
-          { error: "Connection already exists" },
-          { status: 400 }
-        );
-      }
+    // If there's an existing connection and it's not rejected, return error
+    if (existingConnection && existingConnection.status !== "REJECTED") {
+      return NextResponse.json(
+        { error: "Connection already exists" },
+        { status: 400 }
+      );
     }
 
-    // Create new connection request
-    const connection = await prisma.connection.create({
-      data: {
-        senderId: session.user.id,
-        receiverId: userId,
-        status: "PENDING",
-      },
-      include: {
-        sender: {
-          select: {
-            id: true,
-            name: true,
-            image: true,
-          },
-        },
-        receiver: {
-          select: {
-            id: true,
-            name: true,
-            image: true,
-          },
-        },
-      },
-    });
+    // If there's a rejected connection, delete it
+    if (existingConnection && existingConnection.status === "REJECTED") {
+      await prisma.connection.delete({
+        where: { id: existingConnection.id },
+      });
+    }
 
-    // Create notification for the receiver
-    await prisma.notification.create({
-      data: {
-        userId: userId,
+    // Use a transaction to ensure atomicity
+    const result = await prisma.$transaction(async (tx) => {
+      // Create connection request
+      const connection = await tx.connection.create({
+        data: {
+          senderId: session.user.id,
+          receiverId: userId,
+          status: "PENDING",
+        },
+        include: {
+          sender: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      });
+
+      // Send notification to the receiver
+      await sendNotification({
+        userId,
         type: "CONNECTION_REQUEST",
-        message: `${session.user.name} sent you a connection request`,
-        read: false,
-      },
+        message: `${connection.sender.name} sent you a connection request`,
+      });
+
+      return connection;
     });
 
-    console.log("POST Connection - Created connection:", connection);
-    return NextResponse.json(connection);
+    return NextResponse.json(result);
   } catch (error) {
     console.error("Error creating connection:", error);
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
     return NextResponse.json(
       { error: "Failed to create connection" },
       { status: 500 }
@@ -201,126 +143,84 @@ export async function PATCH(
   context: { params: { userId: string } }
 ) {
   try {
-    const params = await context.params;
-    console.log("PATCH Connection - Raw params:", params);
-
     const session = await getServerSession(authOptions);
-    console.log("PATCH Connection - Session user:", session?.user);
-
     if (!session?.user?.id) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const paramsResult = paramsSchema.safeParse({ userId: params.userId });
-    if (!paramsResult.success) {
-      return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
-    }
+    const params = await Promise.resolve(context.params);
+    const { userId } = paramsSchema.parse(params);
+    const { action } = (await request.json()) as {
+      action: "accept" | "reject";
+    };
 
-    const { userId } = paramsResult.data;
-
-    // Prevent self-connections
-    if (session.user.id === userId) {
-      return NextResponse.json(
-        { error: "Cannot accept/reject your own connection" },
-        { status: 400 }
-      );
-    }
-
-    const body = await request.json();
-    console.log("PATCH Connection - Request body:", body);
-
-    const actionResult = actionSchema.safeParse(body);
-    if (!actionResult.success) {
-      return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-    }
-
-    const { action } = actionResult.data;
-
-    // Find pending connection where current user is the receiver and the other user is the sender
-    console.log("PATCH Connection - Searching for connection with:", {
-      senderId: userId,
-      receiverId: session.user.id,
-      status: "PENDING",
-    });
-
-    // First check if there's any connection at all between these users
-    const anyConnection = await prisma.connection.findFirst({
-      where: {
-        OR: [
-          { senderId: userId, receiverId: session.user.id },
-          { senderId: session.user.id, receiverId: userId },
-        ],
-      },
-    });
-    console.log("PATCH Connection - Any connection found:", anyConnection);
-
-    if (!anyConnection) {
-      return NextResponse.json(
-        { error: "No connection exists between these users" },
-        { status: 404 }
-      );
-    }
-
-    // Find the specific pending connection
-    const connection = await prisma.connection.findFirst({
-      where: {
-        senderId: userId,
-        receiverId: session.user.id,
-        status: "PENDING",
-      },
-    });
-
-    console.log("PATCH Connection - Found connection:", connection);
-
-    if (!connection) {
-      return NextResponse.json(
-        { error: "No pending connection request found from this user" },
-        { status: 404 }
-      );
-    }
-
-    // Update connection status
-    const updatedConnection = await prisma.connection.update({
-      where: { id: connection.id },
-      data: {
-        status: action === "accept" ? "ACCEPTED" : "REJECTED",
-      },
-      include: {
-        sender: {
-          select: {
-            id: true,
-            name: true,
-            image: true,
+    // Use a transaction to ensure atomicity
+    const result = await prisma.$transaction(async (tx) => {
+      const connection = await tx.connection.findFirst({
+        where: {
+          senderId: userId,
+          receiverId: session.user.id,
+          status: "PENDING",
+        },
+        include: {
+          receiver: {
+            select: {
+              name: true,
+            },
           },
         },
-        receiver: {
-          select: {
-            id: true,
-            name: true,
-            image: true,
+      });
+
+      if (!connection) {
+        throw new Error("Connection request not found");
+      }
+
+      if (action === "accept") {
+        const updatedConnection = await tx.connection.update({
+          where: { id: connection.id },
+          data: { status: "ACCEPTED" },
+          include: {
+            receiver: {
+              select: {
+                name: true,
+              },
+            },
           },
-        },
-      },
+        });
+
+        // Send notification to the sender that their request was accepted
+        await sendNotification({
+          userId: connection.senderId,
+          type: "CONNECTION_ACCEPTED",
+          message: `${connection.receiver.name} accepted your connection request`,
+        });
+
+        return updatedConnection;
+      } else if (action === "reject") {
+        return await tx.connection.update({
+          where: { id: connection.id },
+          data: { status: "REJECTED" },
+        });
+      }
+
+      throw new Error("Invalid action");
     });
 
-    // Create notification for the sender
-    await prisma.notification.create({
-      data: {
-        userId: updatedConnection.senderId,
-        type:
-          action === "accept" ? "CONNECTION_ACCEPTED" : "CONNECTION_REJECTED",
-        message:
-          action === "accept"
-            ? `${session.user.name} accepted your connection request`
-            : `${session.user.name} declined your connection request`,
-        read: false,
-      },
-    });
-
-    console.log("PATCH Connection - Updated connection:", updatedConnection);
-    return NextResponse.json(updatedConnection);
+    return NextResponse.json(result);
   } catch (error) {
     console.error("Error updating connection:", error);
+    if (error instanceof Error) {
+      if (error.message === "Connection request not found") {
+        return NextResponse.json(
+          { error: "Connection request not found" },
+          { status: 404 }
+        );
+      }
+      if (error.message === "Invalid action") {
+        return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+      }
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
     return NextResponse.json(
       { error: "Failed to update connection" },
       { status: 500 }
@@ -329,38 +229,19 @@ export async function PATCH(
 }
 
 // Delete connection
-export async function DELETE(
-  request: Request,
-  context: { params: { userId: string } }
-) {
+export async function DELETE(request: Request) {
   try {
-    const params = await context.params;
-    console.log("DELETE Connection - Raw params:", params);
-
     const session = await getServerSession(authOptions);
-    console.log("DELETE Connection - Session user:", session?.user);
-
     if (!session?.user?.id) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
     const body = await request.json();
-    console.log("DELETE Connection - Request body:", body);
-
     const { connectionId } = body;
-    if (!connectionId) {
-      return NextResponse.json(
-        { error: "Connection ID is required" },
-        { status: 400 }
-      );
-    }
 
-    // Find the connection and verify ownership
     const connection = await prisma.connection.findUnique({
       where: { id: connectionId },
     });
-
-    console.log("DELETE Connection - Found connection:", connection);
 
     if (!connection) {
       return NextResponse.json(
@@ -369,7 +250,7 @@ export async function DELETE(
       );
     }
 
-    // Verify that the current user is part of the connection
+    // Verify that the user is part of the connection
     if (
       connection.senderId !== session.user.id &&
       connection.receiverId !== session.user.id
@@ -380,15 +261,16 @@ export async function DELETE(
       );
     }
 
-    // Delete the connection
     await prisma.connection.delete({
       where: { id: connectionId },
     });
 
-    console.log("DELETE Connection - Connection deleted successfully");
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting connection:", error);
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
     return NextResponse.json(
       { error: "Failed to delete connection" },
       { status: 500 }

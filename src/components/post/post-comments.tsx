@@ -91,18 +91,33 @@ export function PostComments({ comments, onAddComment }: PostCommentsProps) {
             key={comment.id}
             className="group rounded-lg bg-neutral-50 transition-all duration-200"
           >
-            <div className="flex items-start gap-2 p-2">
-              <Image
-                src={
-                  comment.author.image ||
-                  `https://api.dicebear.com/7.x/avataaars/svg?seed=${comment.author.name}`
-                }
-                alt={comment.author.name || ""}
-                width={24}
-                height={24}
-                className="h-6 w-6 rounded-full"
-              />
-              <div className="min-w-0 flex-1">
+            <div className="flex items-start space-x-4">
+              {comment.author.image ? (
+                <Image
+                  src={comment.author.image}
+                  alt={comment.author.name || ""}
+                  width={32}
+                  height={32}
+                  className="rounded-full"
+                />
+              ) : (
+                <div className="w-8 h-8 bg-neutral-100 rounded-full flex items-center justify-center text-neutral-600">
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                    />
+                  </svg>
+                </div>
+              )}
+              <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <p className="truncate text-lg font-medium text-primary">
                     {comment.author.name}

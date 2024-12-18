@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { pusherClient } from "@/lib/pusher";
+import pusherClient from "@/lib/pusher";
 import { useAuth } from "./use-auth";
 
 interface Message {
@@ -79,7 +79,7 @@ export function useMessages(conversationId?: string) {
     enabled: !conversationId && !!user,
   });
 
-  // Query for messages in a specific conversation
+  // Query for messages in a conversation
   const {
     data: messages,
     isLoading: isLoadingMessages,
@@ -87,9 +87,7 @@ export function useMessages(conversationId?: string) {
   } = useQuery<Message[]>({
     queryKey: ["messages", conversationId],
     queryFn: async () => {
-      const response = await fetch(
-        `/api/messages?conversationId=${conversationId}`
-      );
+      const response = await fetch(`/api/messages/${conversationId}`);
       if (!response.ok) {
         throw new Error("Failed to fetch messages");
       }
@@ -98,8 +96,8 @@ export function useMessages(conversationId?: string) {
     enabled: !!conversationId && !!user,
   });
 
-  // Mutation for sending a message
-  const { mutate: sendMessage, isPending: isSending } = useMutation({
+  // Send message mutation
+  const sendMessage = useMutation({
     mutationFn: async ({
       content,
       receiverId,
@@ -112,7 +110,10 @@ export function useMessages(conversationId?: string) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ content, receiverId }),
+        body: JSON.stringify({
+          content,
+          receiverId,
+        }),
       });
 
       if (!response.ok) {
@@ -135,14 +136,49 @@ export function useMessages(conversationId?: string) {
     },
   });
 
+  // Mark messages as read mutation
+  const markAsRead = useMutation({
+    mutationFn: async (messageIds: string[]) => {
+      const response = await fetch("/api/messages/mark-read", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ messageIds }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to mark messages as read");
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      // Update messages for the current conversation
+      if (conversationId) {
+        queryClient.setQueryData<Message[]>(
+          ["messages", conversationId],
+          (old = []) =>
+            old.map((message) => ({
+              ...message,
+              read: true,
+            }))
+        );
+      }
+
+      // Update conversations list
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    },
+  });
+
   return {
     conversations,
-    isLoadingConversations,
-    conversationsError,
     messages,
+    isLoadingConversations,
     isLoadingMessages,
+    conversationsError,
     messagesError,
     sendMessage,
-    isSending,
+    markAsRead,
   };
 }

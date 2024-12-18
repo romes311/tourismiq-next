@@ -12,7 +12,7 @@ import { EventsForm } from "./events-form";
 import { BlogPostForm } from "./blog-post-form";
 import { BookForm } from "./book-form";
 import { CourseForm } from "./course-form";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import type { InfiniteData } from "@tanstack/react-query";
 import type {
   Post,
@@ -53,8 +53,18 @@ export function CreatePost() {
     null
   );
   const [error, setError] = useState<string | null>(null);
-  const { user } = useAuth();
+  const { user: authUser } = useAuth();
   const queryClient = useQueryClient();
+
+  // Use React Query to get the latest user data
+  const { data: userData } = useQuery({
+    queryKey: ["auth"],
+    queryFn: () => ({ user: authUser }),
+    initialData: { user: authUser },
+    enabled: !!authUser,
+  });
+
+  const user = userData?.user;
 
   const handleCategorySelect = (category: PostCategory) => {
     setSelectedCategory(category);
@@ -224,16 +234,32 @@ export function CreatePost() {
     <>
       <div className="rounded-lg border bg-white p-4 shadow-sm">
         <div className="flex items-center gap-4">
-          <Image
-            src={
-              user?.image ||
-              `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name}`
-            }
-            alt="Your avatar"
-            width={40}
-            height={40}
-            className="rounded-full"
-          />
+          {user?.image ? (
+            <Image
+              src={user.image}
+              alt={user.name || "Your profile"}
+              width={40}
+              height={40}
+              className="rounded-full"
+              priority
+            />
+          ) : (
+            <div className="w-10 h-10 bg-neutral-100 rounded-full flex items-center justify-center text-neutral-600">
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                />
+              </svg>
+            </div>
+          )}
           <Menu as="div" className="relative flex-1">
             <Menu.Button className="w-full rounded-md border bg-neutral-50 px-4 py-2 text-left text-lg text-neutral-500 hover:bg-neutral-100">
               Share your insights...

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "./use-auth";
+import pusherClient from "@/lib/pusher";
 
 interface Notification {
   id: string;
@@ -7,6 +8,12 @@ interface Notification {
   message: string;
   read: boolean;
   createdAt: string;
+}
+
+interface PusherError {
+  type: string;
+  error: string;
+  status: number;
 }
 
 export function useNotifications() {
@@ -17,30 +24,66 @@ export function useNotifications() {
   useEffect(() => {
     if (!user) return;
 
-    // Create EventSource connection
-    const eventSource = new EventSource("/api/notifications/sse");
-
-    eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-
-      if (data.type === "initial") {
-        setNotifications(data.notifications);
-        setUnreadCount(
-          data.notifications.filter((n: Notification) => !n.read).length
-        );
-      } else if (data.type === "notification") {
-        setNotifications((prev) => [data.notification, ...prev]);
-        setUnreadCount((prev) => prev + 1);
+    // Fetch initial notifications
+    const fetchInitialNotifications = async () => {
+      try {
+        const response = await fetch("/api/notifications");
+        if (response.ok) {
+          const data = await response.json();
+          setNotifications(data.notifications);
+          setUnreadCount(
+            data.notifications.filter((n: Notification) => !n.read).length
+          );
+        }
+      } catch (error) {
+        console.error("Error fetching notifications:", error);
       }
     };
 
-    eventSource.onerror = (error) => {
-      console.error("EventSource failed:", error);
-      eventSource.close();
+    fetchInitialNotifications();
+
+    // Subscribe to user's notification channel
+    const channelName = `private-user-${user.id}`;
+    console.log("Subscribing to channel:", channelName);
+
+    const channel = pusherClient.subscribe(channelName);
+
+    // Handle subscription success
+    channel.bind("pusher:subscription_succeeded", () => {
+      console.log("Successfully subscribed to channel:", channelName);
+    });
+
+    // Handle subscription error
+    channel.bind("pusher:subscription_error", (error: PusherError) => {
+      console.error("Error subscribing to channel:", error);
+    });
+
+    // Handle notifications
+    const handleNotification = (notification: Notification) => {
+      console.log("Received notification:", notification);
+
+      setNotifications((prev) => {
+        // Check if notification already exists
+        const exists = prev.some((n) => n.id === notification.id);
+        if (exists) {
+          console.log("Notification already exists, skipping...");
+          return prev;
+        }
+
+        console.log("Adding new notification");
+        // Add new notification at the beginning
+        return [notification, ...prev];
+      });
+
+      setUnreadCount((prev) => prev + 1);
     };
 
+    channel.bind("notification", handleNotification);
+
     return () => {
-      eventSource.close();
+      console.log("Cleaning up Pusher subscription");
+      channel.unbind("notification", handleNotification);
+      pusherClient.unsubscribe(channelName);
     };
   }, [user]);
 
@@ -58,7 +101,7 @@ export function useNotifications() {
         setNotifications((prev) =>
           prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
         );
-        setUnreadCount((prev) => prev - 1);
+        setUnreadCount((prev) => Math.max(0, prev - 1));
       }
     } catch (error) {
       console.error("Error marking notification as read:", error);
@@ -80,10 +123,26 @@ export function useNotifications() {
     }
   };
 
+  const clearAll = async () => {
+    try {
+      const response = await fetch("/api/notifications", {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        setNotifications([]);
+        setUnreadCount(0);
+      }
+    } catch (error) {
+      console.error("Error clearing notifications:", error);
+    }
+  };
+
   return {
     notifications,
     unreadCount,
     markAsRead,
     markAllAsRead,
+    clearAll,
   };
 }

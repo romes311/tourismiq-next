@@ -16,16 +16,33 @@ export function PostList({ posts, showAuthor = true }: PostListProps) {
           <div className="flex items-start space-x-4">
             {showAuthor && (
               <Link href={`/profile/${post.author.id}`}>
-                <Image
-                  src={
-                    post.author.image ||
-                    `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.author.name}`
-                  }
-                  alt={post.author.name || ""}
-                  width={40}
-                  height={40}
-                  className="rounded-full"
-                />
+                <div className="flex items-center space-x-4">
+                  {post.author.image ? (
+                    <Image
+                      src={post.author.image}
+                      alt={post.author.name || ""}
+                      width={40}
+                      height={40}
+                      className="rounded-full"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 bg-neutral-100 rounded-full flex items-center justify-center text-neutral-600">
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                        />
+                      </svg>
+                    </div>
+                  )}
+                </div>
               </Link>
             )}
             <div className="flex-1 min-w-0">

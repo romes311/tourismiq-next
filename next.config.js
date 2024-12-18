@@ -4,18 +4,12 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   images: {
-    dangerouslyAllowSVG: true,
-    contentDispositionType: "attachment",
-    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "api.dicebear.com",
-      },
-      {
-        protocol: "https",
-        hostname: "picsum.photos",
-      },
+    domains: [
+      "res.cloudinary.com",
+      "lh3.googleusercontent.com",
+      "avatars.githubusercontent.com",
+      "images.unsplash.com",
+      "picsum.photos",
     ],
   },
 };
