@@ -64,13 +64,15 @@ export interface UserProfileResponse {
     bio: string | null;
     location: string | null;
     website: string | null;
+    occupation: string | null;
+    interests: string[];
     socialLinks: {
-      twitter?: string;
-      linkedin?: string;
-      facebook?: string;
+      facebook: string | null;
+      twitter: string | null;
+      linkedin: string | null;
+      instagram: string | null;
     } | null;
   };
-  posts: PostsResponse;
 }
 
 export interface ThoughtLeadershipFormData {

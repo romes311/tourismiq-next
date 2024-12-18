@@ -13,6 +13,7 @@ import { VideoEmbed } from "@/components/ui/video-embed";
 import { PostImage } from "@/components/ui/post-image";
 import { PostButtons } from "@/components/post/post-buttons";
 import { PostComments } from "@/components/post/post-comments";
+import Link from "next/link";
 
 interface Comment {
   id: string;
@@ -246,7 +247,12 @@ export function PostCard({ post }: { post: Post }) {
           />
           <div>
             <p className="font-medium text-primary">
-              {post.author.name}
+              <Link
+                href={`/profile/${post.author.id}`}
+                className="hover:underline"
+              >
+                {post.author.name}
+              </Link>
               {post.author.businessName && (
                 <span className="ml-2 text-sm text-neutral-500">
                   at {post.author.businessName}
@@ -495,7 +501,7 @@ export function PostCard({ post }: { post: Post }) {
         )}
 
         {/* Tags */}
-        {post.tags.length > 0 && (
+        {post.tags?.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-2">
             {post.tags.map((tag) => (
               <span

@@ -1,80 +1,23 @@
-import { PrismaClient, PostCategory, Role, User } from "@prisma/client";
+import { PrismaClient, PostCategory, Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
 function getPlaceholderImage(seed: number): string {
-  // Using Lorem Picsum with specific dimensions and a seed for consistent images
   return `https://picsum.photos/seed/${seed}/1200/630`;
 }
 
-function generateRandomDate(start: Date, end: Date) {
-  return new Date(
-    start.getTime() + Math.random() * (end.getTime() - start.getTime())
-  );
-}
-
-interface SeedUsers {
-  founder: User;
-  vendor: User;
-  admin: User;
-}
-
-function generateMorePosts(users: SeedUsers) {
-  const startDate = new Date("2023-01-01");
-  const endDate = new Date();
-  const categories = Object.values(PostCategory);
-  const posts = [];
-
-  // Generate 50 additional posts with random dates
-  for (let i = 0; i < 50; i++) {
-    const randomCategory =
-      categories[Math.floor(Math.random() * categories.length)];
-    const randomUser = [users.founder, users.vendor, users.admin][
-      Math.floor(Math.random() * 3)
-    ];
-    const randomDate = generateRandomDate(startDate, endDate);
-
-    posts.push({
-      title: `${randomCategory} Post #${i + 1}`,
-      content: `This is a sample ${randomCategory.toLowerCase()} post #${
-        i + 1
-      } created on ${randomDate.toLocaleDateString()}.
-
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
-
-Key Points:
-1. Industry Impact
-2. Future Trends
-3. Best Practices
-4. Case Studies
-
-This post explores various aspects of ${randomCategory
-        .toLowerCase()
-        .replace(/_/g, " ")} in the tourism industry.`,
-      summary: `A comprehensive look at ${randomCategory
-        .toLowerCase()
-        .replace(/_/g, " ")} in tourism - Post #${i + 1}`,
-      category: randomCategory,
-      published: true,
-      createdAt: randomDate,
-      updatedAt: randomDate,
-      featuredImage: getPlaceholderImage(i + 1),
-      authorId: randomUser.id,
-      tags: {
-        create: [
-          { name: `tag-${i}-1` },
-          { name: `tag-${i}-2` },
-          { name: `${randomCategory.toLowerCase()}-${i}` },
-        ],
-      },
-    });
-  }
-
-  return posts;
-}
-
 async function main() {
+  console.log("Starting seed process...");
+
+  // Clear existing data
+  console.log("Clearing existing data...");
+  await prisma.post.deleteMany();
+  await prisma.tag.deleteMany();
+  await prisma.profile.deleteMany();
+  await prisma.user.deleteMany();
+
+  console.log("Creating users...");
   // Create admin user
   const adminPassword = await bcrypt.hash("admin123", 10);
   const admin = await prisma.user.create({
@@ -87,82 +30,284 @@ async function main() {
         create: {
           bio: "Platform administrator",
           occupation: "System Administrator",
+          interests: [],
+          canPostCDME: false,
         },
       },
     },
   });
+  console.log("Admin user created:", admin.id);
 
-  // Create a founder user
-  const founderPassword = await bcrypt.hash("founder123", 10);
-  const founder = await prisma.user.create({
+  // Create test user
+  const testPassword = await bcrypt.hash("password123", 10);
+  const testUser = await prisma.user.create({
     data: {
-      email: "founder@tourismiq.com",
-      name: "Sarah Chen",
-      password: founderPassword,
-      role: Role.FOUNDER,
+      email: "test@example.com",
+      name: "Test User",
+      password: testPassword,
+      role: Role.USER,
+      businessName: "Test Company",
       profile: {
         create: {
-          bio: "Tourism industry veteran with 15+ years of experience",
-          occupation: "Tourism Consultant",
-          location: "Singapore",
-          website: "https://example.com/sarah",
+          bio: "This is a test bio",
+          location: "San Francisco, CA",
+          occupation: "Software Engineer",
+          interests: ["tourism", "technology"],
+          canPostCDME: false,
         },
       },
     },
   });
+  console.log("Test user created:", testUser.id);
 
-  // Create a vendor user
-  const vendorPassword = await bcrypt.hash("vendor123", 10);
-  const vendor = await prisma.user.create({
-    data: {
-      email: "vendor@tourismiq.com",
-      name: "Michael Torres",
-      password: vendorPassword,
-      role: Role.VENDOR,
-      businessName: "EcoAdventures Ltd",
-      businessType: "Tour Operator",
-      profile: {
-        create: {
-          bio: "Specializing in sustainable eco-tourism experiences",
-          occupation: "Tour Operator",
-          location: "Costa Rica",
-          website: "https://example.com/ecoadventures",
-        },
-      },
+  // Create sample posts
+  const posts = [
+    // Thought Leadership Posts
+    {
+      title: "The Future of Tourism Technology",
+      content:
+        "An in-depth analysis of emerging trends in tourism technology...",
+      summary: "Exploring the intersection of tourism and technology",
+      category: PostCategory.THOUGHT_LEADERSHIP,
+      featuredImage: getPlaceholderImage(1),
+      authorId: admin.id,
+      tags: ["technology", "future", "trends"],
     },
-  });
+    {
+      title: "Sustainable Tourism Practices",
+      content: "How sustainable practices are shaping the future of tourism...",
+      summary: "A comprehensive guide to sustainable tourism",
+      category: PostCategory.THOUGHT_LEADERSHIP,
+      featuredImage: getPlaceholderImage(2),
+      authorId: testUser.id,
+      tags: ["sustainability", "eco-tourism"],
+    },
 
-  // Generate posts with random dates
-  const posts = generateMorePosts({ founder, vendor, admin });
+    // News Posts
+    {
+      title: "Tourism Industry Recovery Post-Pandemic",
+      content: "Latest statistics show promising recovery in tourism sector...",
+      summary: "Industry recovery trends and statistics",
+      category: PostCategory.NEWS,
+      featuredImage: getPlaceholderImage(3),
+      authorId: admin.id,
+      metadata: {
+        sourceUrl: "https://example.com/news",
+        imageCaption: "Tourism growth chart 2023",
+      },
+      tags: ["recovery", "statistics", "growth"],
+    },
 
+    // Events
+    {
+      title: "International Tourism Conference 2024",
+      content: "Join us for the biggest tourism conference of the year...",
+      category: PostCategory.EVENTS,
+      featuredImage: getPlaceholderImage(4),
+      authorId: admin.id,
+      metadata: {
+        eventStartDate: new Date("2024-06-15T09:00:00Z"),
+        eventEndDate: new Date("2024-06-17T17:00:00Z"),
+        eventLocation: "Las Vegas Convention Center",
+        hostCompany: "TourismIQ",
+        registrationUrl: "https://example.com/register",
+      },
+      tags: ["conference", "networking"],
+    },
+
+    // Blog Posts
+    {
+      title: "Top 10 Tourism Marketing Strategies",
+      content: "Effective marketing strategies for tourism businesses...",
+      category: PostCategory.BLOG_POSTS,
+      featuredImage: getPlaceholderImage(5),
+      authorId: testUser.id,
+      metadata: {
+        author: "Marketing Expert",
+        publishDate: new Date("2023-12-01"),
+        url: "https://example.com/blog",
+      },
+      tags: ["marketing", "strategies"],
+    },
+
+    // Courses
+    {
+      title: "Digital Marketing for Tourism",
+      content:
+        "Learn how to market your tourism business effectively online...",
+      category: PostCategory.COURSES,
+      featuredImage: getPlaceholderImage(6),
+      authorId: admin.id,
+      metadata: {
+        courseUrl: "https://example.com/course",
+        signUpUrl: "https://example.com/signup",
+        companyLogo: getPlaceholderImage(7),
+      },
+      tags: ["education", "digital-marketing"],
+    },
+
+    // Podcasts
+    {
+      title: "Tourism Industry Insights Podcast",
+      content: "Weekly discussions about the tourism industry...",
+      category: PostCategory.PODCASTS,
+      featuredImage: getPlaceholderImage(8),
+      authorId: testUser.id,
+      metadata: {
+        podcastUrl: "https://example.com/podcast",
+        podcastHost: "Industry Expert",
+      },
+      tags: ["podcast", "insights"],
+    },
+
+    // Presentations
+    {
+      title: "Future of Travel Technology",
+      content: "A presentation on emerging travel technologies...",
+      category: PostCategory.PRESENTATIONS,
+      featuredImage: getPlaceholderImage(9),
+      authorId: admin.id,
+      metadata: {
+        presentationDate: new Date("2024-01-15"),
+        presentationVenue: "Tech Conference Center",
+      },
+      tags: ["technology", "presentation"],
+    },
+
+    // Templates
+    {
+      title: "Tourism Business Plan Template",
+      content: "A comprehensive business plan template for tourism ventures...",
+      category: PostCategory.TEMPLATES,
+      featuredImage: getPlaceholderImage(10),
+      authorId: admin.id,
+      metadata: {
+        templateFileUrl: "https://example.com/template",
+        templateFileType: "PDF",
+      },
+      tags: ["business", "planning"],
+    },
+
+    // Case Studies
+    {
+      title: "Successful Tourism Marketing Campaign",
+      content: "A case study of a successful tourism marketing campaign...",
+      category: PostCategory.CASE_STUDIES,
+      featuredImage: getPlaceholderImage(11),
+      authorId: testUser.id,
+      metadata: {
+        caseStudyCompany: "Tourism Success Ltd",
+        caseStudyIndustry: "Destination Marketing",
+      },
+      tags: ["case-study", "marketing"],
+    },
+
+    // Whitepapers
+    {
+      title: "The Impact of AI on Tourism",
+      content: "An analysis of how AI is transforming the tourism industry...",
+      category: PostCategory.WHITEPAPERS,
+      featuredImage: getPlaceholderImage(12),
+      authorId: admin.id,
+      metadata: {
+        whitepaperFileUrl: "https://example.com/whitepaper",
+        whitepaperTopics: ["AI", "Technology", "Tourism"],
+      },
+      tags: ["AI", "research"],
+    },
+
+    // Jobs
+    {
+      title: "Tourism Marketing Manager",
+      content: "We're looking for an experienced Tourism Marketing Manager...",
+      category: PostCategory.JOBS,
+      authorId: testUser.id,
+      metadata: {
+        company: "Tourism Enterprise",
+        location: "New York, NY",
+        salary: "$80,000 - $100,000",
+      },
+      tags: ["jobs", "marketing", "management"],
+    },
+  ];
+
+  console.log("Creating sample posts...");
+  let createdPosts = 0;
   // Create all posts
   for (const post of posts) {
-    await prisma.post.create({
-      data: post,
-    });
+    try {
+      await prisma.post.create({
+        data: {
+          ...post,
+          published: true,
+          tags: {
+            connectOrCreate: post.tags.map((tag) => ({
+              where: { name: tag },
+              create: { name: tag },
+            })),
+          },
+        },
+      });
+      createdPosts++;
+      console.log(`Created post ${createdPosts}: ${post.title}`);
+    } catch (error) {
+      console.error(`Failed to create post: ${post.title}`, error);
+    }
   }
 
-  // Create some follows relationships
-  await prisma.follows.create({
-    data: {
-      followerId: vendor.id,
-      followingId: founder.id,
-    },
-  });
+  // Generate additional random posts for volume
+  console.log("Creating additional random posts...");
+  const categories = Object.values(PostCategory);
+  const authors = [admin.id, testUser.id];
 
-  await prisma.follows.create({
-    data: {
-      followerId: admin.id,
-      followingId: founder.id,
-    },
-  });
+  for (let i = 0; i < 40; i++) {
+    try {
+      const category =
+        categories[Math.floor(Math.random() * categories.length)];
+      const authorId = authors[Math.floor(Math.random() * authors.length)];
+      const postNumber = i + 1;
 
-  console.log("Seed data created successfully");
+      await prisma.post.create({
+        data: {
+          title: `Sample ${category} Post ${postNumber}`,
+          content: `This is a sample ${category.toLowerCase()} post content. This post demonstrates the type of content you might find in the ${category.toLowerCase()} category. It includes relevant information and details specific to this category.`,
+          summary: `Sample ${category.toLowerCase()} summary ${postNumber}`,
+          category,
+          published: true,
+          featuredImage: getPlaceholderImage(i + 20),
+          authorId,
+          tags: {
+            connectOrCreate: [
+              {
+                where: { name: category.toLowerCase() },
+                create: { name: category.toLowerCase() },
+              },
+              {
+                where: { name: `tag-${postNumber}` },
+                create: { name: `tag-${postNumber}` },
+              },
+            ],
+          },
+        },
+      });
+      createdPosts++;
+      console.log(`Created random post ${postNumber} (${category})`);
+    } catch (error) {
+      console.error(`Failed to create random post ${i + 1}`, error);
+    }
+  }
+
+  console.log({
+    message: "Seed data created successfully",
+    adminId: admin.id,
+    testUserId: testUser.id,
+    totalPostsCreated: createdPosts,
+  });
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error("Seed failed:", e);
     process.exit(1);
   })
   .finally(async () => {

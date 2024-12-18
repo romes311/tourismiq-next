@@ -55,11 +55,12 @@ model User {
   posts         Post[]
   comments      Comment[]
 
-  followers     Follows[] @relation("following")
-  following     Follows[] @relation("follower")
-
   businessName  String?
   businessType  String?
+
+  // Connection relationships
+  sentConnections     Connection[] @relation("SentConnections")
+  receivedConnections Connection[] @relation("ReceivedConnections")
 
   notifications Notification[]
   activities    Activity[]
@@ -72,10 +73,13 @@ model Profile {
   website     String?
   occupation  String?
   interests   String[]
-  coverImage  String?
+  canPostCDME Boolean  @default(false)
+  socialLinks Json?    // Stores social media links as JSON: { facebook, twitter, linkedin, instagram }
 
   userId      String   @unique
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profile")
 }
 
 model Post {
@@ -162,16 +166,6 @@ model Comment {
   replies   Comment[] @relation("CommentReplies")
 }
 
-model Follows {
-  followerId  String
-  follower    User     @relation("follower", fields: [followerId], references: [id])
-  followingId String
-  following   User     @relation("following", fields: [followingId], references: [id])
-  createdAt   DateTime @default(now())
-
-  @@id([followerId, followingId])
-}
-
 model Tag {
   id    String @id @default(cuid())
   name  String @unique
@@ -197,4 +191,24 @@ model Activity {
 
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Connection {
+  id         String           @id @default(cuid())
+  status     ConnectionStatus @default(PENDING)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  sender     User            @relation("SentConnections", fields: [senderId], references: [id])
+  senderId   String
+  receiver   User            @relation("ReceivedConnections", fields: [receiverId], references: [id])
+  receiverId String
+
+  @@index([senderId])
+  @@index([receiverId])
+}
+
+enum ConnectionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
 }

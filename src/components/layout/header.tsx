@@ -3,7 +3,15 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
-import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import {
+  MagnifyingGlassIcon,
+  BellIcon,
+  ChatBubbleLeftIcon,
+  TrophyIcon,
+  QuestionMarkCircleIcon,
+} from "@heroicons/react/24/outline";
+import { Menu } from "@headlessui/react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -50,25 +58,78 @@ export function Header() {
             <>
               <Button
                 variant="ghost"
-                className="text-primary"
-                onClick={() => router.push("/dashboard")}
+                size="icon"
+                className="text-neutral-500 hover:text-primary"
               >
-                Dashboard
+                <QuestionMarkCircleIcon className="h-5 w-5" />
               </Button>
               <Button
                 variant="ghost"
-                className="text-primary"
-                onClick={() => router.push(`/profile/${user?.id}`)}
+                size="icon"
+                className="text-neutral-500 hover:text-primary"
               >
-                Profile
+                <TrophyIcon className="h-5 w-5" />
               </Button>
               <Button
-                variant="outline"
-                className="border-primary text-primary hover:bg-primary hover:text-white"
-                onClick={() => signOut({ callbackUrl: "/login" })}
+                variant="ghost"
+                size="icon"
+                className="text-neutral-500 hover:text-primary"
               >
-                Sign out
+                <ChatBubbleLeftIcon className="h-5 w-5" />
               </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-neutral-500 hover:text-primary"
+              >
+                <BellIcon className="h-5 w-5" />
+              </Button>
+
+              <Menu as="div" className="relative">
+                <Menu.Button className="flex items-center justify-center rounded-full overflow-hidden hover:ring-2 hover:ring-primary/20 transition-all">
+                  <Image
+                    src={
+                      user?.image ||
+                      `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name}`
+                    }
+                    alt="Your avatar"
+                    width={36}
+                    height={36}
+                    className="rounded-full transition-all duration-300 ease-in-out"
+                  />
+                </Menu.Button>
+
+                <Menu.Items className="absolute right-0 mt-2 w-48 origin-top-right rounded-lg bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+                  <Menu.Item>
+                    {({ active }) => (
+                      <button
+                        onClick={() => router.push(`/profile/${user?.id}`)}
+                        className={`${
+                          active
+                            ? "bg-neutral-50 text-primary"
+                            : "text-neutral-700"
+                        } flex w-full items-center px-4 py-2 text-sm`}
+                      >
+                        View Profile
+                      </button>
+                    )}
+                  </Menu.Item>
+                  <Menu.Item>
+                    {({ active }) => (
+                      <button
+                        onClick={() => signOut({ callbackUrl: "/login" })}
+                        className={`${
+                          active
+                            ? "bg-neutral-50 text-primary"
+                            : "text-neutral-700"
+                        } flex w-full items-center px-4 py-2 text-sm`}
+                      >
+                        Sign out
+                      </button>
+                    )}
+                  </Menu.Item>
+                </Menu.Items>
+              </Menu>
             </>
           ) : (
             <>

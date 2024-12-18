@@ -48,18 +48,26 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.name,
           role: user.role,
+          image: user.image,
         };
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
         token.email = user.email;
         token.name = user.name;
         token.role = user.role;
+        token.image = user.image;
       }
+
+      // Handle image update
+      if (trigger === "update" && session?.user?.image) {
+        token.image = session.user.image;
+      }
+
       return token;
     },
     async session({ session, token }) {
@@ -68,10 +76,12 @@ export const authOptions: NextAuthOptions = {
         session.user.email = token.email as string;
         session.user.name = token.name as string;
         session.user.role = token.role as Role;
+        session.user.image = token.image as string | null;
       }
+
       return session;
     },
   },
   secret: process.env.NEXTAUTH_SECRET,
-  debug: process.env.NODE_ENV === "development",
+  debug: false,
 };

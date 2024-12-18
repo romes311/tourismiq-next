@@ -56,6 +56,7 @@ export function useUpvote(postId: string) {
 
       // Refetch posts to get updated counts
       queryClient.invalidateQueries({ queryKey: ["posts"] });
+      queryClient.invalidateQueries({ queryKey: ["user-posts"] });
     },
   });
 
