@@ -15,10 +15,20 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { useNotifications } from "@/hooks/use-notifications";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 
 export function Header() {
   const { user, isAuthenticated } = useAuth();
   const router = useRouter();
+  const { notifications, unreadCount, markAsRead, markAllAsRead } =
+    useNotifications();
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -29,7 +39,7 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-white">
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between px-4">
         {/* Left section */}
         <Link href="/" className="flex items-center space-x-2">
@@ -77,13 +87,134 @@ export function Header() {
               >
                 <ChatBubbleLeftIcon className="h-5 w-5" />
               </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-neutral-500 hover:text-primary"
-              >
-                <BellIcon className="h-5 w-5" />
-              </Button>
+
+              {/* Notifications */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="relative text-neutral-500 hover:text-primary"
+                    aria-label="Notifications"
+                  >
+                    <BellIcon className="h-5 w-5" />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-medium text-white">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-0 bg-white" align="end">
+                  <div className="flex items-center justify-between border-b px-4 py-3">
+                    <h4 className="font-semibold">Notifications</h4>
+                    {unreadCount > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={markAllAsRead}
+                        className="text-sm"
+                      >
+                        Mark all as read
+                      </Button>
+                    )}
+                  </div>
+                  <ScrollArea className="h-[calc(100vh-20rem)] p-4">
+                    {notifications.length > 0 ? (
+                      <div className="space-y-4">
+                        {notifications.map((notification) => (
+                          <div
+                            key={notification.id}
+                            className={cn(
+                              "flex flex-col gap-2 rounded-lg p-3 transition-colors",
+                              !notification.read && "bg-neutral-50"
+                            )}
+                          >
+                            <div className="flex items-start justify-between gap-4">
+                              <p className="text-sm flex-1">
+                                {notification.message}
+                              </p>
+                              {!notification.read && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => markAsRead(notification.id)}
+                                  className="shrink-0"
+                                >
+                                  Mark as read
+                                </Button>
+                              )}
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs text-neutral-500">
+                                {new Date(
+                                  notification.createdAt
+                                ).toLocaleDateString()}
+                              </p>
+                              {notification.type === "CONNECTION_REQUEST" && (
+                                <Button
+                                  variant="link"
+                                  size="sm"
+                                  className="h-auto p-0 text-primary"
+                                  onClick={() => {
+                                    // Close the popover
+                                    const button = document.querySelector(
+                                      '[aria-label="Notifications"]'
+                                    );
+                                    if (button) {
+                                      (button as HTMLButtonElement).click();
+                                    }
+                                    // Navigate to the connections tab
+                                    router.push(
+                                      `/profile/${user?.id}?tab=connections`
+                                    );
+                                    // Mark as read
+                                    if (!notification.read) {
+                                      markAsRead(notification.id);
+                                    }
+                                  }}
+                                >
+                                  View Request →
+                                </Button>
+                              )}
+                              {notification.type === "CONNECTION_ACCEPTED" && (
+                                <Button
+                                  variant="link"
+                                  size="sm"
+                                  className="h-auto p-0 text-primary"
+                                  onClick={() => {
+                                    // Close the popover
+                                    const button = document.querySelector(
+                                      '[aria-label="Notifications"]'
+                                    );
+                                    if (button) {
+                                      (button as HTMLButtonElement).click();
+                                    }
+                                    // Navigate to the connections tab
+                                    router.push(
+                                      `/profile/${user?.id}?tab=connections`
+                                    );
+                                    // Mark as read
+                                    if (!notification.read) {
+                                      markAsRead(notification.id);
+                                    }
+                                  }}
+                                >
+                                  View Connections →
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-center text-sm text-neutral-500">
+                        No notifications
+                      </p>
+                    )}
+                  </ScrollArea>
+                </PopoverContent>
+              </Popover>
 
               <Menu as="div" className="relative">
                 <Menu.Button className="flex items-center justify-center rounded-full overflow-hidden hover:ring-2 hover:ring-primary/20 transition-all">

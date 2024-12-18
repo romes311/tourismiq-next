@@ -174,6 +174,16 @@ export async function POST(
       },
     });
 
+    // Create notification for the receiver
+    await prisma.notification.create({
+      data: {
+        userId: userId,
+        type: "CONNECTION_REQUEST",
+        message: `${session.user.name} sent you a connection request`,
+        read: false,
+      },
+    });
+
     console.log("POST Connection - Created connection:", connection);
     return NextResponse.json(connection);
   } catch (error) {
@@ -290,6 +300,20 @@ export async function PATCH(
             image: true,
           },
         },
+      },
+    });
+
+    // Create notification for the sender
+    await prisma.notification.create({
+      data: {
+        userId: updatedConnection.senderId,
+        type:
+          action === "accept" ? "CONNECTION_ACCEPTED" : "CONNECTION_REJECTED",
+        message:
+          action === "accept"
+            ? `${session.user.name} accepted your connection request`
+            : `${session.user.name} declined your connection request`,
+        read: false,
       },
     });
 

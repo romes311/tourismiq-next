@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUserPosts } from "@/hooks/use-user-posts";
 import type { UserProfileResponse } from "@/lib/types";
@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { ImageCropModal } from "@/components/profile/image-crop-modal";
 import { useSession } from "next-auth/react";
 import { signOut, signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
 type Tab =
   | "about"
   | "posts"
@@ -35,7 +36,35 @@ export default function ProfilePage() {
   const { user: currentUser } = useAuth();
   const { data: session, update: updateSession } = useSession();
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab") as Tab | null;
   const isOwnProfile = currentUser?.id === userId;
+
+  // Set active tab from URL parameter
+  useEffect(() => {
+    if (tabParam && tabs.some((tab) => tab.id === tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
+
+  // Update URL when tab changes
+  const handleTabChange = (tab: Tab) => {
+    setActiveTab(tab);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", tab);
+    router.replace(`${window.location.pathname}?${params.toString()}`);
+
+    // Refetch connections data when switching to connections tab
+    if (tab === "connections") {
+      queryClient.invalidateQueries({
+        queryKey: ["pending-connections", userId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["accepted-connections", userId],
+      });
+    }
+  };
 
   const [formData, setFormData] = useState<{
     name: string;
@@ -161,7 +190,10 @@ export default function ProfilePage() {
       console.log("Pending connections data:", data);
       return data;
     },
-    enabled: isOwnProfile || activeTab === "connections",
+    enabled:
+      isOwnProfile &&
+      (activeTab === "connections" || tabParam === "connections"),
+    refetchInterval: activeTab === "connections" ? 5000 : false, // Refetch every 5 seconds when on connections tab
   });
 
   const { data: acceptedConnections } = useQuery({
@@ -178,7 +210,8 @@ export default function ProfilePage() {
       console.log("Accepted connections data:", data);
       return data;
     },
-    enabled: activeTab === "connections",
+    enabled: activeTab === "connections" || tabParam === "connections",
+    refetchInterval: activeTab === "connections" ? 5000 : false, // Refetch every 5 seconds when on connections tab
   });
 
   const tabs: { id: Tab; label: string; notification?: number }[] = [
@@ -1192,7 +1225,7 @@ export default function ProfilePage() {
             {tabs.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleTabChange(tab.id)}
                 className={cn(
                   "px-6 py-3 text-sm font-medium whitespace-nowrap transition-colors relative",
                   activeTab === tab.id
