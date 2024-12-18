@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -40,30 +34,76 @@ enum PostCategory {
   RECENT_JOBS
 }
 
+enum ConnectionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
 model User {
   id            String    @id @default(cuid())
-  email         String    @unique
   name          String?
-  password      String
-  role          Role      @default(USER)
+  email         String?   @unique
   emailVerified DateTime?
   image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  role          Role      @default(USER)
+  businessName  String?
+  location      String?
+  bio           String?
+  occupation    String?
+  canPostCDME   Boolean   @default(false)
+  socialLinks   Json?     // Stores social media links as JSON: { facebook, twitter, linkedin, instagram }
 
-  profile       Profile?
+  accounts      Account[]
+  sessions      Session[]
   posts         Post[]
   comments      Comment[]
-
-  businessName  String?
-  businessType  String?
+  profile       Profile?
 
   // Connection relationships
   sentConnections     Connection[] @relation("SentConnections")
   receivedConnections Connection[] @relation("ReceivedConnections")
 
+  // Message relationships
+  sentMessages     Message[]        @relation("SentMessages")
+  receivedMessages Message[]        @relation("ReceivedMessages")
+  conversations    Conversation[]   @relation("UserConversations")
+
   notifications Notification[]
   activities    Activity[]
+
+  @@map("user")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  password          String? @db.Text
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("account")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("session")
 }
 
 model Profile {
@@ -96,7 +136,7 @@ model Post {
   // Common fields that might be used across categories
   featuredImage String?
   images        String[]
-  tags          Tag[]
+  tags          Tag[]      @relation("PostToTag")
   location      String?
 
   // Author relationship
@@ -169,7 +209,7 @@ model Comment {
 model Tag {
   id    String @id @default(cuid())
   name  String @unique
-  posts Post[]
+  posts Post[] @relation("PostToTag")
 }
 
 model Notification {
@@ -207,8 +247,33 @@ model Connection {
   @@index([receiverId])
 }
 
-enum ConnectionStatus {
-  PENDING
-  ACCEPTED
-  REJECTED
+model Message {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  read      Boolean  @default(false)
+
+  senderId    String
+  sender      User   @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId  String
+  receiver    User   @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([conversationId])
+  @@map("message")
+}
+
+model Conversation {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  participants User[] @relation("UserConversations")
+  messages     Message[]
+
+  @@map("conversation")
 }

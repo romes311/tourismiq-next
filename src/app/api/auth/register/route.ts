@@ -33,21 +33,35 @@ export async function POST(req: Request) {
       data: {
         name: body.name,
         email: body.email,
-        password: hashedPassword,
+        emailVerified: new Date(),
+        accounts: {
+          create: {
+            type: "credentials",
+            provider: "credentials",
+            providerAccountId: body.email,
+            password: hashedPassword,
+          },
+        },
+        profile: {
+          create: {
+            bio: "",
+            interests: [],
+          },
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        image: true,
       },
     });
 
-    // Create an empty profile for the user
-    await prisma.profile.create({
-      data: {
-        userId: user.id,
-      },
+    return NextResponse.json({
+      success: true,
+      user,
     });
-
-    // Remove sensitive data from response
-    const { password: _password, ...userWithoutPassword } = user;
-
-    return NextResponse.json(userWithoutPassword);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -56,6 +70,7 @@ export async function POST(req: Request) {
       );
     }
 
+    console.error("Registration error:", error);
     return NextResponse.json(
       { message: "Something went wrong" },
       { status: 500 }

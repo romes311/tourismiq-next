@@ -24,14 +24,21 @@ async function main() {
     data: {
       email: "admin@tourismiq.com",
       name: "Admin User",
-      password: adminPassword,
       role: Role.ADMIN,
+      emailVerified: new Date(),
       profile: {
         create: {
           bio: "Platform administrator",
           occupation: "System Administrator",
           interests: [],
-          canPostCDME: false,
+        },
+      },
+      accounts: {
+        create: {
+          type: "credentials",
+          provider: "credentials",
+          providerAccountId: "admin@tourismiq.com",
+          password: adminPassword,
         },
       },
     },
@@ -39,13 +46,13 @@ async function main() {
   console.log("Admin user created:", admin.id);
 
   // Create test user
-  const testPassword = await bcrypt.hash("password123", 10);
+  const testPassword = await bcrypt.hash("test123", 10);
   const testUser = await prisma.user.create({
     data: {
       email: "test@example.com",
       name: "Test User",
-      password: testPassword,
       role: Role.USER,
+      emailVerified: new Date(),
       businessName: "Test Company",
       profile: {
         create: {
@@ -53,7 +60,14 @@ async function main() {
           location: "San Francisco, CA",
           occupation: "Software Engineer",
           interests: ["tourism", "technology"],
-          canPostCDME: false,
+        },
+      },
+      accounts: {
+        create: {
+          type: "credentials",
+          provider: "credentials",
+          providerAccountId: "test@example.com",
+          password: testPassword,
         },
       },
     },
@@ -249,65 +263,16 @@ async function main() {
         },
       });
       createdPosts++;
-      console.log(`Created post ${createdPosts}: ${post.title}`);
     } catch (error) {
       console.error(`Failed to create post: ${post.title}`, error);
     }
   }
-
-  // Generate additional random posts for volume
-  console.log("Creating additional random posts...");
-  const categories = Object.values(PostCategory);
-  const authors = [admin.id, testUser.id];
-
-  for (let i = 0; i < 40; i++) {
-    try {
-      const category =
-        categories[Math.floor(Math.random() * categories.length)];
-      const authorId = authors[Math.floor(Math.random() * authors.length)];
-      const postNumber = i + 1;
-
-      await prisma.post.create({
-        data: {
-          title: `Sample ${category} Post ${postNumber}`,
-          content: `This is a sample ${category.toLowerCase()} post content. This post demonstrates the type of content you might find in the ${category.toLowerCase()} category. It includes relevant information and details specific to this category.`,
-          summary: `Sample ${category.toLowerCase()} summary ${postNumber}`,
-          category,
-          published: true,
-          featuredImage: getPlaceholderImage(i + 20),
-          authorId,
-          tags: {
-            connectOrCreate: [
-              {
-                where: { name: category.toLowerCase() },
-                create: { name: category.toLowerCase() },
-              },
-              {
-                where: { name: `tag-${postNumber}` },
-                create: { name: `tag-${postNumber}` },
-              },
-            ],
-          },
-        },
-      });
-      createdPosts++;
-      console.log(`Created random post ${postNumber} (${category})`);
-    } catch (error) {
-      console.error(`Failed to create random post ${i + 1}`, error);
-    }
-  }
-
-  console.log({
-    message: "Seed data created successfully",
-    adminId: admin.id,
-    testUserId: testUser.id,
-    totalPostsCreated: createdPosts,
-  });
+  console.log(`Created ${createdPosts} sample posts`);
 }
 
 main()
   .catch((e) => {
-    console.error("Seed failed:", e);
+    console.error(e);
     process.exit(1);
   })
   .finally(async () => {

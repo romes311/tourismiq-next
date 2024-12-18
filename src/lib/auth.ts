@@ -1,5 +1,6 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import GoogleProvider from "next-auth/providers/google";
 import { prisma } from "./prisma";
 import bcrypt from "bcryptjs";
 import { Role } from "@prisma/client";
@@ -13,6 +14,10 @@ export const authOptions: NextAuthOptions = {
     signIn: "/login",
   },
   providers: [
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
     CredentialsProvider({
       name: "credentials",
       credentials: {
@@ -28,15 +33,22 @@ export const authOptions: NextAuthOptions = {
           where: {
             email: credentials.email,
           },
+          include: {
+            accounts: {
+              where: {
+                provider: "credentials",
+              },
+            },
+          },
         });
 
-        if (!user) {
+        if (!user || !user.accounts[0]?.password) {
           return null;
         }
 
         const isPasswordValid = await bcrypt.compare(
           credentials.password,
-          user.password
+          user.accounts[0].password
         );
 
         if (!isPasswordValid) {
@@ -54,7 +66,75 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user, trigger, session }) {
+    async signIn({ account, profile }) {
+      if (account?.provider === "google" && profile?.email) {
+        try {
+          const existingUser = await prisma.user.findUnique({
+            where: { email: profile.email },
+            include: {
+              accounts: {
+                where: {
+                  provider: "google",
+                },
+              },
+            },
+          });
+
+          if (!existingUser) {
+            await prisma.user.create({
+              data: {
+                email: profile.email,
+                name: profile.name ?? "",
+                image: profile.picture,
+                emailVerified: new Date(),
+                accounts: {
+                  create: {
+                    type: account.type,
+                    provider: account.provider,
+                    providerAccountId: account.providerAccountId,
+                    access_token: account.access_token,
+                    expires_at: account.expires_at,
+                    token_type: account.token_type,
+                    scope: account.scope,
+                    id_token: account.id_token,
+                  },
+                },
+                profile: {
+                  create: {
+                    bio: "",
+                    interests: [],
+                  },
+                },
+              },
+            });
+            return true;
+          }
+
+          if (!existingUser.accounts.length) {
+            await prisma.account.create({
+              data: {
+                userId: existingUser.id,
+                type: account.type,
+                provider: account.provider,
+                providerAccountId: account.providerAccountId,
+                access_token: account.access_token,
+                expires_at: account.expires_at,
+                token_type: account.token_type,
+                scope: account.scope,
+                id_token: account.id_token,
+              },
+            });
+          }
+
+          return true;
+        } catch (error) {
+          console.error("Error in signIn callback:", error);
+          return false;
+        }
+      }
+      return true;
+    },
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
         token.email = user.email;
@@ -62,12 +142,6 @@ export const authOptions: NextAuthOptions = {
         token.role = user.role;
         token.image = user.image;
       }
-
-      // Handle image update
-      if (trigger === "update" && session?.user?.image) {
-        token.image = session.user.image;
-      }
-
       return token;
     },
     async session({ session, token }) {
@@ -78,10 +152,9 @@ export const authOptions: NextAuthOptions = {
         session.user.role = token.role as Role;
         session.user.image = token.image as string | null;
       }
-
       return session;
     },
   },
   secret: process.env.NEXTAUTH_SECRET,
-  debug: false,
+  debug: process.env.NODE_ENV === "development",
 };

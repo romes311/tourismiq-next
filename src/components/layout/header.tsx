@@ -23,12 +23,25 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 
 export function Header() {
   const { user, isAuthenticated } = useAuth();
   const router = useRouter();
   const { notifications, unreadCount, markAsRead, markAllAsRead } =
     useNotifications();
+
+  const { data: unreadMessageCount } = useQuery({
+    queryKey: ["unread-messages"],
+    queryFn: async () => {
+      const response = await fetch("/api/messages/unread-count");
+      if (!response.ok) {
+        throw new Error("Failed to fetch unread message count");
+      }
+      return response.json();
+    },
+    enabled: isAuthenticated,
+  });
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -83,9 +96,15 @@ export function Header() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="text-neutral-500 hover:text-primary"
+                className="relative text-neutral-500 hover:text-primary"
+                onClick={() => router.push(`/profile/${user?.id}?tab=messages`)}
               >
                 <ChatBubbleLeftIcon className="h-5 w-5" />
+                {unreadMessageCount?.count > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-medium text-white">
+                    {unreadMessageCount.count}
+                  </span>
+                )}
               </Button>
 
               {/* Notifications */}
